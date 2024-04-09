@@ -1,11 +1,11 @@
-# BeltingLab
-## *Project works done for Mattias Belting's laboratory at Lund University*
-
 # Integrative mRNA and Proteomic Analysis of Glioblastoma cell-surface antigens
+
+$${\color{gray}Project\ works\ done\ for\ Mattias\ Belting's\ laboratory\ at\ Lund\ University}$$
 
 ## Introduction
 
-[//]: # (This section provide a brief overview of the biological background relevant to the research project and explain the biological problem being addressed, its significance in the field, and a summary of the approach or hypothesis being tested.)
+> [!NOTE]
+> This section provide a brief overview of the biological background relevant to the research project and explain the biological problem being addressed, its significance in the field, and a summary of the approach or hypothesis being tested.
 
 Glioblastoma (GBM) is the most common and one of the most aggressive forms of primary malignant brain tumour. The current therapeutic strategy *i.e., surgical resection and radio chemotherapy* does not significantly prolong patient survival, however, low mutational burden, especially in paediatric tumour offers promising directions for developing personalized cancer treatments. Recent efforts of the group developed a platform for unbiased mapping the tumour surfaceome (TS-MAP) in glioblastoma, revealing the importance of cellular spatial organization on surfaceome diversity and identifying potential targets for antibody-drug conjugates [(Governa et al., 2022)](https://doi.org/10.1073/pnas.2114456119) 
 
@@ -19,7 +19,8 @@ By comparing mRNA expression levels across both 2D and 3D cell culture systems u
 
 ## Sample Metadata Summary
 
-[//]: # (This section provides a summary of the sample metadata used in this study including: sample source, treatments or conditions applied, and library preparation parameters ... essential for interpreting the results of the bioinformatics analyses)
+>[!NOTE]
+> This section provides a summary of the sample metadata used in this study including: sample source, treatments or conditions applied, and library preparation parameters... essential for interpreting the results of the bioinformatics analyses.
 
 ### Metadata Fields
 
@@ -32,7 +33,8 @@ By comparing mRNA expression levels across both 2D and 3D cell culture systems u
 
 ## Setting Up the Environment
 
-[//]: # (To conduct the computational analyses required for this project, it's crucial to set up a consistent and reproducible environment. This section provides a guide through the process of setting up the computational environment: library tree, software dependencies and creating a virtual environment.)
+>[!NOTE]
+> To conduct the computational analyses required for this project, it's crucial to set up a consistent and reproducible environment. This section provides a guide through the process of setting up the computational environment: library tree, software dependencies and creating a virtual environment.
 
 ### Directory tree
 ```bash
@@ -75,12 +77,15 @@ While the environment - called 'glioblastoma' - is created, based on the `enviro
 # packages in environment at /root/miniforge3/envs/glioblastoma:
 #
 # Name                    Version                   Build  Channel
-cutadapt                  4.7              py39hf95cd2a_1    bioconda
+cutadapt                  4.7             py310h4b81fae_1    bioconda
 fastqc                    0.12.1               hdfd78af_0    bioconda
-matplotlib                3.8.3            py39hf3d152e_0    conda-forge
-numpy                     1.26.4           py39h474f0d3_0    conda-forge
-python                    3.9.19          h0755675_0_cpython    conda-forge
+hisat2                    2.2.1                hdbdd923_6    bioconda
+pip                       24.0               pyhd8ed1ab_0    conda-forge
+python                    3.10.14         hd12c33a_0_cpython    conda-forge
+salmon                    1.10.1               hecfa306_2    bioconda
+samtools                  1.19.2               h50ea8bc_1    bioconda
 seqtk                     1.4                  he4a0461_2    bioconda
+star                      2.7.11b              h43eeafb_1    bioconda
 trim-galore               0.6.10               hdfd78af_0    bioconda
 ```
 
@@ -89,9 +94,7 @@ trim-galore               0.6.10               hdfd78af_0    bioconda
 First, writing permissin for all users has been removed from the files, to avoid ever overwriting them! Then, instead of reallocating them, considering disk space and GDPR compliance, a symbolic link to the file locations was created.
 
 ```bash
-for file in $(cat config/samples.tsv); do 
-    chmod a-w /mnt/a/${file}/*; 
-done
+chmod a-w /mnt/a/Sample*
 
 ln -s /mnt/a/Sample* data/00_raw/
 ```
@@ -103,7 +106,7 @@ then
     # First, add a header line
     echo -e "Sample,Forward read,Reverse read" > "${config_dir}/samples.csv"
     # Loop through the files in the input directory
-    samples=$(ls -d ${input_dir}Sample_*)
+    samples=$(ls -d ${input_dir}/Sample_*)
     
     # Loops through the folders containing the forward and reverse reads
     while read -r sample
@@ -133,4 +136,40 @@ do
 done < <(tail -n +2 "${config_dir}/samples.csv") # skip the header
 ```
 
+# Bioinformatical pipeline 1: RNA-seq from cell lines (2D) and organoids (3D) grown under normoxia and hypoxia
+$${\color{gray}Compare\ gene\ expression\ under\ different\ growth\ conditions.}$$
 
+## Quality Control
+This step involves the pre-processing of the data to remove:
+- adapter sequences (adapter trimming)
+- low-quality reads
+- uncalled bases
+In this step, quality assessment is performed using the TrimGalore suite, which is a wrapper script around the popular tools FastQC and the adapter trimming algorithm Cutadapt. Cutadapt is a semi-global aligner algorithm (also called free-shift), which means that the sequences are allowed to freely shift relative to each other and differences are only penalised in the overlapping region between them. The algorithm works using unit costs (alignment score) to find the optimal overlap alignments, where positive value is assigned to matching bases and penalties are given for mismatches, inserts or deletions. 
+>[!IMPORTANT]
+>It is important to check that sequence quality is similar for all samples and discard outliers. As a general rule, read quality decreases towards the 3’ end of reads, and if it becomes too low, bases should be removed to improve mappability.  The quality and/or adapter trimming may result in very short sequences (sometimes as short as 0 bp), and since alignment programs may require sequences with a certain minimum length to avoid crashes to short fragments (in the case above, below 36 bases: --length 36) should not be considered either.
+
+Following a prelimnary quality assessment with FastQC, we can say that the overall quality of the bases is high, over the required treshold, however there is a high precentage of adapter contamination. Every adapter match seems to fall under the Illumina adapters' list, so the flag `--illumina` will be included in the trimming! *E.g. FastQC over-represented sequences fails for VI-3429-593-2DH-1_R1_001.fastq :*
+| #Sequence                                          | Count | Percentage | Possible Source                          |
+|----------------------------------------------------|-------|------------|------------------------------------------|
+| GATCGGAAGAGCACACGTCTGAACTCCAGTCACGTCGGAGCATCTCGTAT | 119   | 1.19       | TruSeq Adapter, Index 18 (97% over 38bp) |
+| GATCGGAAGAGCACACGTCTGAACTCCAGTCACGTCGGAGCATCGCGTAT | 47    | 0.47       | TruSeq Adapter, Index 18 (97% over 38bp) |
+| GTCGGCATGTATTAGCTCTAGAATTACCACAGTTATCCAAGTAGGAGAGG | 16    | 0.16       | No Hit                                   |
+| CTTTTACTTCCTCTAGATAGTCAAGTTCGACCGTCTTCTCAGCGCTCCGC | 14    | 0.14       | No Hit                                   |
+| CCGACTTCCATGGCCACCGTCCTGCTGTCTATATCAACCAACACCTTTTC | 11    | 0.11       | No Hit                                   |
+
+```bash
+# Loop through the files in the input directory
+echo "Trimming adapters with Trim Galore on sample: ${sample}"
+fw_read=$(ls ${input_dir}/${sample}_R1_001.fastq) # find forward read pair
+rv_read=$(ls ${input_dir}/${sample}_R2_001.fastq) # find reverse read pair
+        
+trim_galore ${fw_read} ${rv_read} -j 4 -q 20 --length 36 --paired --illumina -o ${output_dir} 
+```
+The arguments mean:
+- `-j/--cores [INT]` – defines the number of  of cores to be used for trimming *[default: 1]*,
+- `-q/--quality [INT]` – trims low-quality ends from reads below the threshold (as Phred score) in addition to adapter removal *[default: 20]*,
+- `--length [INT]` – discards reads that become shorter than length INT because of either quality or adapter trimming,
+- `--paired` – this option performs length trimming of quality/adapter/RRBS trimmed reads for paired-end files. To pass the validation test, both of a sequence pair are required to have a certain minimum length (defined by `--length`),
+- `--illumina` - selects the adapter class to match by cutadapt, in this case Illumina (*first 13bp of the Illumina universal adapter 'AGATCGGAAGAGC'*)
+- `--fastqc_args [ARGS]` – runs FastQC and passes down arguments in the form “arg1 arg2 etc.”, if we do not wish to pass extra arguments, FastQC in default mode can be invoked by `--fastqc` argument as well (***Either one should be called at a time!***).
+- `-o/--output_dir` – is used to specify where all output will be written.
