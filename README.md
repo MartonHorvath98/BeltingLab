@@ -1,11 +1,11 @@
 # Integrative mRNA and Proteomic Analysis of Glioblastoma cell-surface antigens
 
-$${\color{gray}Project\ works\ done\ for\ Mattias\ Belting's\ laboratory\ at\ Lund\ University}$$
+$${\color{gray}\-\ Project\ works\ done\ for\ Mattias\ Belting's\ laboratory\ at\ Lund\ University\ \-}$$
 
 ## Introduction
 
 > [!NOTE]
-> This section provide a brief overview of the biological background relevant to the research project and explain the biological problem being addressed, its significance in the field, and a summary of the approach or hypothesis being tested.
+> $${\color{teal}This\ section\ provide\ a\ brief\ overview\ of\ the\ biological\ background\ relevant\ to\ the\ research\ project\ and\ explain\ the\ biological\ problem\ being\ addressed,\ its\ significance\ in\ the\ field,\ and\ a\ summary\ of\ the\ approach\ or\ hypothesis\ being\ tested.}
 
 Glioblastoma (GBM) is the most common and one of the most aggressive forms of primary malignant brain tumour. The current therapeutic strategy *i.e., surgical resection and radio chemotherapy* does not significantly prolong patient survival, however, low mutational burden, especially in paediatric tumour offers promising directions for developing personalized cancer treatments. Recent efforts of the group developed a platform for unbiased mapping the tumour surfaceome (TS-MAP) in glioblastoma, revealing the importance of cellular spatial organization on surfaceome diversity and identifying potential targets for antibody-drug conjugates [(Governa et al., 2022)](https://doi.org/10.1073/pnas.2114456119) 
 
@@ -20,7 +20,7 @@ By comparing mRNA expression levels across both 2D and 3D cell culture systems u
 ## Sample Metadata Summary
 
 >[!NOTE]
-> This section provides a summary of the sample metadata used in this study including: sample source, treatments or conditions applied, and library preparation parameters... essential for interpreting the results of the bioinformatics analyses.
+> $${\color{teal}This\ section\ provides\ a\ summary\ of\ the\ sample\ metadata\ used\ in this\ study\ including:\ sample\ source,\ treatments\ or\ conditions\ applied,\ and\ library\ preparation\ parameters...\ essential\ for\ interpreting\ the\ results\ of\ the\ bioinformatics\ analyses.}
 
 ### Metadata Fields
 
@@ -34,7 +34,7 @@ By comparing mRNA expression levels across both 2D and 3D cell culture systems u
 ## Setting Up the Environment
 
 >[!NOTE]
-> To conduct the computational analyses required for this project, it's crucial to set up a consistent and reproducible environment. This section provides a guide through the process of setting up the computational environment: library tree, software dependencies and creating a virtual environment.
+> $${\color{teal}To\ conduct\ the\ computational\ analyses\ required\ for\ this\ project,\ it's\ crucial\ to\ set\ up\ a\ consistent\ and\ reproducible\ environment.\ This\ section\ provides\ a\ guide\ through\ the\ process\ of\ setting\ up\ the\ computational\ environment:\ library\ tree,\ software\ dependencies\ and\ creating\ a\ virtual\ environment.\}
 
 ### Directory tree
 ```bash
