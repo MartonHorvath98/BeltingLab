@@ -1,0 +1,14 @@
+name: glioblastoma
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - python=3.9
+  - pip
+  - numpy=1.26.4
+  - matplotlib=3.8.3
+  - star=2.7.11b
+  - seqtk=1.4
+  - fastqc=0.12.1
+  - trim-galore=0.6.10
