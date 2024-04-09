@@ -136,8 +136,10 @@ do
 done < <(tail -n +2 "${config_dir}/samples.csv") # skip the header
 ```
 
-# Bioinformatical pipeline 1: RNA-seq from cell lines (2D) and organoids (3D) grown under normoxia and hypoxia
+# Bioinformatical pipeline 
+## I. RNA-seq from cell lines (2D) and organoids (3D) grown under normoxia and hypoxia
 $${\color{gray}\-\ Compare\ gene\ expression\ under\ different\ growth\ conditions.\ \-}$$
+
 
 ## Quality Control
 This step involves the pre-processing of the data to remove:
@@ -173,3 +175,24 @@ The arguments mean:
 - `--illumina` - selects the adapter class to match by cutadapt, in this case Illumina (*first 13bp of the Illumina universal adapter 'AGATCGGAAGAGC'*)
 - `--fastqc_args [ARGS]` – runs FastQC and passes down arguments in the form “arg1 arg2 etc.”, if we do not wish to pass extra arguments, FastQC in default mode can be invoked by `--fastqc` argument as well (***Either one should be called at a time!***).
 - `-o/--output_dir` – is used to specify where all output will be written.
+
+## Read mapping
+
+Once the pre-processing and quality control steps are completed the resulting, high-quality data is ready for the read mapping or alignment step. Depending on the availability of a reference genome sequence, it can happen in one of two ways: 
+1. When studying an organism with a reference genome, it is possible to infer which transcripts are expressed by mapping the reads to the reference genome (Genome mapping) or transcriptome (Transcriptome mapping). Mapping reads to the genome requires no knowledge of the set of transcribed regions or the way in which exons are spliced together. This approach allows the discovery of new, unannotated transcripts.
+2. When working on an organism without a reference genome, reads need to be assembled first into longer contigs (de novo assembly). These contigs can then be considered as the expressed transcriptome to which reads are re-mapped for quantification.
+
+>[!NOTE]
+>*In this case, we follow the aprroach remains genome mapping, followed by building a more accurate, splicing-sensitive transcriptome in a genome-guided manner, and then to increase the number of mapped reads by aligning them to the assembled transcriptome. However, these steps will only happen as part of the later workflow to identify gene fusions, and mutated genes.*
+
+There are many bioinformatics tools available to perform the alignment of short reads. Here, the one used is Hisat2, one of the most popular mapper tools, which stands for “hierarchical indexing for spliced alignment of transcripts 2”. Hisat2 provides fast and sensitive alignment, in a splice-sensitive manner, which makes it ideal for aligning RNA-samples. Besides Hisat2, read will also be aligned with quasi-mapper, Salmon. The technique employed by Salmon rapidly approximates the positions where reads might originate from the transcriptome without producing an explicit alignment of reads to the genome allowing a rapid quantification of gene expression levels.
+
+>[!NOTE]
+>*Besides the mapper algorithms, we will use Samtools for processing and analysing the data. It includes tools for file format conversion and manipulation, sorting, querying, and statistics amongst other methods.*
+
+### Prepare reference genome
+
+>[!IMPORTANT]
+>***It is crucial to download the same reference in .fasta and .gff format from the same origin, to avoid conflicts in later steps of the analysis pipeline. Here, the GRCh38 release version v.108 (2022 Oct) of H. sapiens (human) from Ensembl is used as reference.***
+
+
