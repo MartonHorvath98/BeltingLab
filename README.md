@@ -5,7 +5,7 @@ $${\color{gray}\-\ Project\ works\ done\ for\ Mattias\ Belting's\ laboratory\ at
 ## Introduction
 
 > [!NOTE]
-> $${\color{teal}This\ section\ provide\ a\ brief\ overview\ of\ the\ biological\ background\ relevant\ to\ the\ research\ project\ and\ explain\ the\ biological\ problem\ being\ addressed,\ its\ significance\ in\ the\ field,\ and\ a\ summary\ of\ the\ approach\ or\ hypothesis\ being\ tested.}
+> *This section provide a brief overview of the biological background relevant to the research project and explain the biological problem being addressed, its significance in the field, and a summary of the approach or hypothesis being tested.*
 
 Glioblastoma (GBM) is the most common and one of the most aggressive forms of primary malignant brain tumour. The current therapeutic strategy *i.e., surgical resection and radio chemotherapy* does not significantly prolong patient survival, however, low mutational burden, especially in paediatric tumour offers promising directions for developing personalized cancer treatments. Recent efforts of the group developed a platform for unbiased mapping the tumour surfaceome (TS-MAP) in glioblastoma, revealing the importance of cellular spatial organization on surfaceome diversity and identifying potential targets for antibody-drug conjugates [(Governa et al., 2022)](https://doi.org/10.1073/pnas.2114456119) 
 
@@ -20,7 +20,7 @@ By comparing mRNA expression levels across both 2D and 3D cell culture systems u
 ## Sample Metadata Summary
 
 >[!NOTE]
-> $${\color{teal}This\ section\ provides\ a\ summary\ of\ the\ sample\ metadata\ used\ in this\ study\ including:\ sample\ source,\ treatments\ or\ conditions\ applied,\ and\ library\ preparation\ parameters...\ essential\ for\ interpreting\ the\ results\ of\ the\ bioinformatics\ analyses.}
+> *This section provides a summary of the sample metadata used in this study including: sample source, treatments or conditions applied, and library preparation parameters... essential for interpreting the results of the bioinformatics analyses.*
 
 ### Metadata Fields
 
@@ -34,7 +34,7 @@ By comparing mRNA expression levels across both 2D and 3D cell culture systems u
 ## Setting Up the Environment
 
 >[!NOTE]
-> $${\color{teal}To\ conduct\ the\ computational\ analyses\ required\ for\ this\ project,\ it's\ crucial\ to\ set\ up\ a\ consistent\ and\ reproducible\ environment.\ This\ section\ provides\ a\ guide\ through\ the\ process\ of\ setting\ up\ the\ computational\ environment:\ library\ tree,\ software\ dependencies\ and\ creating\ a\ virtual\ environment.\}
+> *To conduct the computational analyses required for this project, it's crucial to set up a consistent and reproducible environment. This section provides a guide through the process of setting up the computational environment: library tree, software dependencies and creating a virtual environment.*
 
 ### Directory tree
 ```bash
@@ -137,7 +137,7 @@ done < <(tail -n +2 "${config_dir}/samples.csv") # skip the header
 ```
 
 # Bioinformatical pipeline 1: RNA-seq from cell lines (2D) and organoids (3D) grown under normoxia and hypoxia
-$${\color{gray}Compare\ gene\ expression\ under\ different\ growth\ conditions.}$$
+$${\color{gray}\-\ Compare\ gene\ expression\ under\ different\ growth\ conditions.\ \-}$$
 
 ## Quality Control
 This step involves the pre-processing of the data to remove:
@@ -146,7 +146,7 @@ This step involves the pre-processing of the data to remove:
 - uncalled bases
 In this step, quality assessment is performed using the TrimGalore suite, which is a wrapper script around the popular tools FastQC and the adapter trimming algorithm Cutadapt. Cutadapt is a semi-global aligner algorithm (also called free-shift), which means that the sequences are allowed to freely shift relative to each other and differences are only penalised in the overlapping region between them. The algorithm works using unit costs (alignment score) to find the optimal overlap alignments, where positive value is assigned to matching bases and penalties are given for mismatches, inserts or deletions. 
 >[!IMPORTANT]
->It is important to check that sequence quality is similar for all samples and discard outliers. As a general rule, read quality decreases towards the 3’ end of reads, and if it becomes too low, bases should be removed to improve mappability.  The quality and/or adapter trimming may result in very short sequences (sometimes as short as 0 bp), and since alignment programs may require sequences with a certain minimum length to avoid crashes to short fragments (in the case above, below 36 bases: --length 36) should not be considered either.
+> ***It is important to check that sequence quality is similar for all samples and discard outliers. As a general rule, read quality decreases towards the 3’ end of reads, and if it becomes too low, bases should be removed to improve mappability.  The quality and/or adapter trimming may result in very short sequences (sometimes as short as 0 bp), and since alignment programs may require sequences with a certain minimum length to avoid crashes to short fragments (in the case above, below 36 bases: --length 36) should not be considered either.***
 
 Following a prelimnary quality assessment with FastQC, we can say that the overall quality of the bases is high, over the required treshold, however there is a high precentage of adapter contamination. Every adapter match seems to fall under the Illumina adapters' list, so the flag `--illumina` will be included in the trimming! *E.g. FastQC over-represented sequences fails for VI-3429-593-2DH-1_R1_001.fastq :*
 | #Sequence                                          | Count | Percentage | Possible Source                          |
