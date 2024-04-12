@@ -1,6 +1,21 @@
 # Integrative mRNA and Proteomic Analysis of Glioblastoma cell-surface antigens
 
-$${\color{gray}\-\ Project\ works\ done\ for\ Mattias\ Belting's\ laboratory\ at\ Lund\ University\ \-}$$
+$${\color{gray}Project\ works\ done\ for\ Mattias\ Belting's\ laboratory\ at\ Lund\ University}$$
+
+- [Integrative mRNA and Proteomic Analysis of Glioblastoma cell-surface antigens](#integrative-mrna-and-proteomic-analysis-of-glioblastoma-cell-surface-antigens)
+  - [Introduction](#introduction)
+  - [Project aims](#project-aims)
+  - [Sample Metadata Summary](#sample-metadata-summary)
+    - [Metadata Fields](#metadata-fields)
+  - [Setting Up the Environment](#setting-up-the-environment)
+    - [Directory tree](#directory-tree)
+    - [Environment prerequisits](#environment-prerequisits)
+  - [Raw data files](#raw-data-files)
+- [Bioinformatical pipeline](#bioinformatical-pipeline)
+  - [I. RNA-seq from cell lines (2D) and organoids (3D) grown under normoxia and hypoxia](#i-rna-seq-from-cell-lines-2d-and-organoids-3d-grown-under-normoxia-and-hypoxia)
+    - [Quality Control](#quality-control)
+    - [Read mapping](#read-mapping)
+    - [Prepare reference genome](#prepare-reference-genome)
 
 ## Introduction
 
@@ -138,15 +153,18 @@ done < <(tail -n +2 "${config_dir}/samples.csv") # skip the header
 
 # Bioinformatical pipeline 
 ## I. RNA-seq from cell lines (2D) and organoids (3D) grown under normoxia and hypoxia
-$${\color{gray}\-\ Compare\ gene\ expression\ under\ different\ growth\ conditions.\ \-}$$
+$${\color{gray}-\ Compare\ gene\ expression\ under\ different\ growth\ conditions\ -}$$
 
 
-## Quality Control
+### Quality Control
 This step involves the pre-processing of the data to remove:
+
 - adapter sequences (adapter trimming)
 - low-quality reads
 - uncalled bases
-In this step, quality assessment is performed using the TrimGalore suite, which is a wrapper script around the popular tools FastQC and the adapter trimming algorithm Cutadapt. Cutadapt is a semi-global aligner algorithm (also called free-shift), which means that the sequences are allowed to freely shift relative to each other and differences are only penalised in the overlapping region between them. The algorithm works using unit costs (alignment score) to find the optimal overlap alignments, where positive value is assigned to matching bases and penalties are given for mismatches, inserts or deletions. 
+
+In this step, quality assessment is performed using the TrimGalore suite, which is a wrapper script around the popular tools FastQC and the adapter trimming algorithm Cutadapt. Cutadapt is a semi-global aligner algorithm (also called free-shift), which means that the sequences are allowed to freely shift relative to each other and differences are only penalised in the overlapping region between them. The algorithm works using unit costs (alignment score) to find the optimal overlap alignments, where positive value is assigned to matching bases and penalties are given for mismatches, inserts or deletions.
+
 >[!IMPORTANT]
 > ***It is important to check that sequence quality is similar for all samples and discard outliers. As a general rule, read quality decreases towards the 3’ end of reads, and if it becomes too low, bases should be removed to improve mappability.  The quality and/or adapter trimming may result in very short sequences (sometimes as short as 0 bp), and since alignment programs may require sequences with a certain minimum length to avoid crashes to short fragments (in the case above, below 36 bases: --length 36) should not be considered either.***
 
@@ -176,7 +194,7 @@ The arguments mean:
 - `--fastqc_args [ARGS]` – runs FastQC and passes down arguments in the form “arg1 arg2 etc.”, if we do not wish to pass extra arguments, FastQC in default mode can be invoked by `--fastqc` argument as well (***Either one should be called at a time!***).
 - `-o/--output_dir` – is used to specify where all output will be written.
 
-## Read mapping
+### Read mapping
 
 Once the pre-processing and quality control steps are completed the resulting, high-quality data is ready for the read mapping or alignment step. Depending on the availability of a reference genome sequence, it can happen in one of two ways: 
 1. When studying an organism with a reference genome, it is possible to infer which transcripts are expressed by mapping the reads to the reference genome (Genome mapping) or transcriptome (Transcriptome mapping). Mapping reads to the genome requires no knowledge of the set of transcribed regions or the way in which exons are spliced together. This approach allows the discovery of new, unannotated transcripts.
@@ -195,4 +213,36 @@ There are many bioinformatics tools available to perform the alignment of short 
 >[!IMPORTANT]
 >***It is crucial to download the same reference in .fasta and .gff format from the same origin, to avoid conflicts in later steps of the analysis pipeline. Here, the GRCh38 release version v.108 (2022 Oct) of H. sapiens (human) from Ensembl is used as reference.***
 
+Indexes for the hisat2 and salmon aligners are created using the `makeGrch38.sh` script. The hisat2-build command will create eight files with the extensions *.1.ht2, .2.ht2, .3.ht2, .4.ht2, .5.ht2, .6.ht2, .7.ht2* and *.8.ht2*. These files together are the index for hisat2. Because the plans include heavy focus on alternative splicing and gene fusion events, the genome index is created with transcript annotations using the `--ss` and `--exon` flags. These take into account the prepared exons and splice sites, in HISAT2's own format (three or four tab-separated columns).
+```bash
+# The Ensembl release version and base URLs for downloads
+ENSEMBL_RELEASE=108
+ENSEMBL_GENOME=ftp://ftp.ensembl.org/pub/release-${ENSEMBL_RELEASE}/fasta/homo_sapiens/dna
+ENSEMBL_GFF3_BASE=ftp://ftp.ensembl.org/pub/release-${ENSEMBL_RELEASE}/gff3/homo_sapiens/
+ENSEMBL_TRANSCRIPTOME=ftp://ftp.ensembl.org/pub/release-${ENSEMBL_RELEASE}/fasta/homo_sapiens/cds
+# Index reference genome with samtools 
+samtools faidx <path/…/ref.fasta> 
+# Convert GFF file to GTF 
+gffread <path/…/ref.gff> -T -o <path/…/ref.gtf>
+# Extract splice sites and exons
+hisat2_extract_splice_sites.py -v <path/…/ref.gtf> > <path/…/splicesite.tsv>
+hisat2_extract_exons.py -v <path/…/ref.gtf> > <path/…/exons.tsv>
 
+# Build HISAT2 index with transcripts annotations
+hisat-build -p ${threads} --seed 100 ${ENSEMBL_GENOME} --ss <path/…/splicesite.tsv> --exon  <path/…/exons.tsv>  <path/…/HISAT/base_name>
+```
+
+To get accurate quantification estimates with Salmon in mapping-based mode a salmon index for the transcriptome has to be built as well. We build the recommended, decoy-aware transcriptome file, using the entire genome of the organism (Grch38) as the decoy sequence. This is achieved by concatenating the genome to the end of the transcriptome before indexing. Salmon indexing also requires populating the decoys.txt file with the chromosome names, which is extractable by using the `grep` command. This scheme provides a more comprehensive set of decoys, but, obviously, requires considerably more memory to build the index. We can run salmon indexing step, with the same ensemble reference files, as follows:
+
+>[!IMPORTANT] 
+> The genome targets (decoys) should come after the transcriptome targets in the reference!
+
+```bash
+# Create decoys.txt file
+grep "^>" ${ENSEMBL_GENOME} | cut -d " " -f 1 | sed -e 's/>//g' > <path/…/decoys.txt>
+# Concatenate transcriptome and genome
+cat ${ENSEMBL_TRANSCRIPTOME} ${ENSEMBL_GENOME} > <path/…/gentrome.fa>
+
+# Build Salmon index
+salmon index -t gentrome.fa -d decoys.txt -i <path/…/SALMON/> -k 31 -p ${threads}
+```

@@ -28,8 +28,9 @@ done
 
 # Set up the Ensembl release version and base URLs
 ENSEMBL_RELEASE=108
-ENSEMBL_FASTA_BASE=ftp://ftp.ensembl.org/pub/release-${ENSEMBL_RELEASE}/fasta/homo_sapiens/dna
+ENSEMBL_GENOME=ftp://ftp.ensembl.org/pub/release-${ENSEMBL_RELEASE}/fasta/homo_sapiens/dna
 ENSEMBL_GFF3_BASE=ftp://ftp.ensembl.org/pub/release-${ENSEMBL_RELEASE}/gff3/homo_sapiens/
+ENSEMBL_TRANSCRIPTOME=ftp://ftp.ensembl.org/pub/release-${ENSEMBL_RELEASE}/fasta/homo_sapiens/cds
 
 # Custom download function
 get() {
@@ -78,19 +79,37 @@ if [ ! -x "$GFFREAD_EXE" ] ; then
 		GFFREAD_EXE=`which gffread`
 	fi
 fi
+## 4. Salmon
+SALMON_EXE=./salmon
+if [ ! -x "$SALMON_EXE" ] ; then
+	if ! which salmon ; then
+		echo "Could not find salmon in current directory or in PATH"
+		exit 1
+	else
+		SALMON_EXE=`which salmon`
+	fi
+fi
+# Download the GRCh38 reference genome fasta file (unless it already exists)
+GENOME=Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
+if [ ! -f "${dir}/${GENOME%.dna.primary_assembly.fa.gz}.fa" ] ; then
+	get ${ENSEMBL_GENOME}/$GENOME ${dir} || (echo "Error getting $GENOME" && exit 1)
+	gunzip ${dir}/$GENOME || (echo "Error unzipping $GENOME" && exit 1)
+	mv ${dir}/${GENOME%.gz} ${dir}/${GENOME%.dna.primary_assembly.fa.gz}.fa
+fi
+GENOME=${dir}/${GENOME%.dna.primary_assembly.fa.gz}.fa
 
 # Download the GRCh38 reference genome fasta file (unless it already exists)
-FASTA=Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
-if [ ! -f "${dir}/${FASTA%.dna.primary_assembly.fa.gz}.fa" ] ; then
-	get ${ENSEMBL_FASTA_BASE}/$FASTA ${dir} || (echo "Error getting $FASTA" && exit 1)
-	gunzip ${dir}/$FASTA || (echo "Error unzipping $FASTA" && exit 1)
-	mv ${dir}/${FASTA%.gz} ${dir}/${FASTA%.dna.primary_assembly.fa.gz}.fa
+TRANSCRIPTOME=Homo_sapiens.GRCh38.cds.all.fa.gz
+if [ ! -f "${dir}/${TRANSCRIPTOME%.cds.all.fa.gz}.cds.fa" ] ; then
+	get ${ENSEMBL_TRANSCRIPTOME}/$TRANSCRIPTOME ${dir} || (echo "Error getting $TRANSCRIPTOME" && exit 1)
+	gunzip ${dir}/$TRANSCRIPTOME || (echo "Error unzipping $TRANSCRIPTOME" && exit 1)
+	mv ${dir}/${TRANSCRIPTOME%.gz} ${dir}/${TRANSCRIPTOME%.cds.all.fa.gz}.cds.fa
 fi
-FASTA=${dir}/${FASTA%.dna.primary_assembly.fa.gz}.fa
+TRANSCRIPTOME=${dir}/${TRANSCRIPTOME%.cds.all.fa.gz}.cds.fa
 
 # Download the reference's gene annotation in GFF3 format (unless it already exists)
 GFF=Homo_sapiens.GRCh38.${ENSEMBL_RELEASE}.gff3.gz
-if [ ! -f "${dir}/${GFF%.gff.gz}.gtf" ] ; then
+if [ ! -f "${dir}/${GFF%.${ENSEMBL_RELEASE}.gff3.gz}.gff" ] ; then
 	get ${ENSEMBL_GFF3_BASE}/$GFF ${dir} || (echo "Error getting $GFF" && exit 1)
 	gunzip ${dir}/$GFF || (echo "Error unzipping $GFF" && exit 1)
 	mv ${dir}/${GFF%.gz} ${dir}/${GFF%.${ENSEMBL_RELEASE}.gff3.gz}.gff
@@ -98,36 +117,68 @@ fi
 GFF=${dir}/${GFF%.${ENSEMBL_RELEASE}.gff3.gz}.gff
 
 # BUILD REFERENCE GENOME INDECES
-## 1. Index reference genome with samtools
-SAMTOOLS="${SAMTOOLS_EXE} faidx ${FASTA}"
-if [ ! -f "${FASTA}.fai"] ; then
-	echo Running $SAMTOOLS
-	if $SAMTOOLS ; then
-		echo "Genome index built"
-	else
-		echo "Index building failed; see error message"
-	fi
-fi
-## 2. Convert GFF file to GTF
-GFFREAD="${GFFREAD_EXE} ${GFF} -T -o ${GFF%.gff}.gtf"
+echo "##########################################################"
+echo "# 1. Index reference genome with samtools                #"
+echo "##########################################################"
 
-if [ ! -f "${GFF%.gff}.gtf"] ; then
-	echo Running $GFFREAD
-	if $GFFREAD ; then
-		echo "GFF to GTF conversion"
-	else
-		echo "Conversion failed; see error message"
-	fi
-fi
-## 3. Build HISAT2 index
-HISAT="${HISAT2_BUILD_EXE} -p ${threads} --seed 100 ${FASTA} ${dir}/${base_name}"
-if [ ! -f "${dir}/${base_name}.1.ht2" ] ; then
-	echo Running $HISAT
-	if $HISAT ; then
-		echo "genome index built; you may remove fasta files"
-	else
-		echo "Index building failed; see error message"
-	fi
+SAMTOOLS="${SAMTOOLS_EXE} faidx ${GENOME}"
+echo Running $SAMTOOLS
+if $SAMTOOLS ; then
+	echo "Genome index built"
 else
-	echo "Index already exists; you may remove fasta files"
+	echo "Index building failed; see error message"
+fi
+
+echo "##########################################################"
+echo "# 2. Convert GFF file to GTF                             #"
+echo "##########################################################"
+
+GFFREAD="${GFFREAD_EXE} ${GFF} -T -o ${GFF%.gff}.gtf"
+echo Running $GFFREAD
+if $GFFREAD ; then
+	echo "GFF to GTF conversion"
+else
+	echo "Conversion failed; see error message"
+fi
+
+echo "##########################################################"
+echo "# 3. Extract splice sites and exons                      #"
+echo "##########################################################"
+# extract splice sites
+HISAT_DIR=${dir}/hisat && mkdir -p ${HISAT_DIR}
+hisat2_extract_splice_sites.py ${GFF%.gff}.gtf > ${HISAT_DIR}/${base_name}.ss
+SS=${HISAT_DIR}/${base_name}.ss
+# extract exons
+hisat2_extract_exons.py ${GFF%.gff}.gtf > ${dir}/hisat/${base_name}.exon
+EXON=${HISAT_DIR}/${base_name}.exon
+
+echo "##########################################################"
+echo " 4. Building HISAT2 index                                #"
+echo "##########################################################"
+
+HISAT="${HISAT2_BUILD_EXE} -p ${threads} --seed 100 ${GENOME} --ss ${SS} --exon ${EXON} ${HISAT_DIR}/${base_name}"
+echo Running $HISAT
+if $HISAT ; then
+	echo "genome index built; you may remove fasta files"
+else
+	echo "Index building failed; see error message"
+fi
+
+echo "##########################################################"
+echo "# 5. Build Salmon index                                  #"
+echo "##########################################################"
+# Create decoys.txt file
+SALMON_DIR=${dir}/salmon_index && mkdir -p ${SALMON_DIR}
+grep "^>" ${GENOME} | cut -d " " -f 1 > decoys.txt
+sed -i.bak -e 's/>//g' decoys.txt
+# Concatenate transcriptome and genome
+cat ${TRANSCRIPTOME} ${GENOME} > gentrome.fa
+# Build Salmon index
+SALMON_INDEX="${SALMON_EXE} index -t gentrome.fa -d decoys.txt -i ${SALMON_DIR} -k 31 -p ${threads}"
+echo Running $SALMON_INDEX
+if $SALMON_INDEX ; then
+	rm gentrome.fa
+	echo "Salmon index built"
+else
+	echo "Index building failed; see error message"
 fi
