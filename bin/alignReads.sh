@@ -1,6 +1,6 @@
 #! bin/bash
 
-# Take user arguments: input-, config- and output directories
+# Take user arguments: input-, config- and output directories, mode, reference, base_name and cores
 while getopts i:m:j:r:b:o: flag
 do
     case "${flag}" in
@@ -56,7 +56,7 @@ then
             rm "${output_dir}/${sample}.bam"
 
             # Calculate readcounts with featureCounts
-            featureCounts -p --countReadPairs -s 0 -f -M -O -T ${cores} -a ${reference}/Homo_sapiens.GRCh38.gff\
+            featureCounts -p --countReadPairs -s 2 -f -M -O -T ${cores} -a ${reference}/Homo_sapiens.GRCh38.gff\
             -o "${output_dir}/${sample}.counts.txt" "${output_dir}/${sample}.sorted.bam"
         done <<< "${samples}"
     else

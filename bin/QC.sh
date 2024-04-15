@@ -1,10 +1,11 @@
 #! bin/bash
 
 # Take user arguments: input directory and output directory
-while getopts i:o: flag
+while getopts i:p:o: flag
 do
     case "${flag}" in
         i) input_dir=${OPTARG};;
+        p) thread=${OPTARG};;
         o) output_dir=${OPTARG};;
     esac
 done
@@ -23,7 +24,7 @@ then
     while read -r sample
     do
         echo "Running FastQC on sample: $sample"
-        fastqc -o $output_dir $sample
+        fastqc -t ${threads} -o $output_dir $sample
     done <<< "$samples"
 else
     echo "Input directory does not exist"
