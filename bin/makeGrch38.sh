@@ -89,6 +89,17 @@ if [ ! -x "$SALMON_EXE" ] ; then
 		SALMON_EXE=`which salmon`
 	fi
 fi
+## 5. Salmon
+BED_EXE=./gff2bed
+if [ ! -x "$BED_EXE" ] ; then
+	if ! which gff2bed ; then
+		echo "Could not find bedops in current directory or in PATH"
+		exit 1
+	else
+		SALMON_EXE=`which gff2bed`
+	fi
+fi
+
 # Download the GRCh38 reference genome fasta file (unless it already exists)
 GENOME=Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
 if [ ! -f "${dir}/${GENOME%.dna.primary_assembly.fa.gz}.fa" ] ; then
@@ -130,12 +141,13 @@ else
 fi
 
 echo "##########################################################"
-echo "# 2. Convert GFF file to GTF                             #"
+echo "# 2. Convert GFF file to GTF and BED                     #"
 echo "##########################################################"
 
 GFFREAD="${GFFREAD_EXE} ${GFF} -T -o ${GFF%.gff}.gtf"
 echo Running $GFFREAD
 if $GFFREAD ; then
+	gff2bed < ${GFF%.gff}.gtf > ${GFF%.gff}.bed
 	echo "GFF to GTF conversion"
 else
 	echo "Conversion failed; see error message"
@@ -174,7 +186,7 @@ sed -i.bak -e 's/>//g' decoys.txt
 # Concatenate transcriptome and genome
 cat ${TRANSCRIPTOME} ${GENOME} > gentrome.fa
 # Build Salmon index
-SALMON_INDEX="${SALMON_EXE} index -t gentrome.fa -d decoys.txt -i ${SALMON_DIR} -k 31 -p ${threads}"
+SALMON_INDEX="${SALMON_EXE} index -t gentrome.fa -d decoys.txt -i ${SALMON_DIR} -k 13 -p ${threads}"
 echo Running $SALMON_INDEX
 if $SALMON_INDEX ; then
 	rm gentrome.fa
@@ -182,3 +194,11 @@ if $SALMON_INDEX ; then
 else
 	echo "Index building failed; see error message"
 fi
+
+# Remove concatenated transcriptome and genome
+rm gentrome.fa
+
+echo "##########################################################"
+echo "# 6. Indexing complete                                   #"
+echo "##########################################################"
+echo "You may now use the reference genome with HISAT2, Salmon, and other tools."
