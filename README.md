@@ -1,23 +1,24 @@
-# Integrative mRNA and Proteomic Analysis of Glioblastoma cell-surface antigens
+# 1. Integrative mRNA and Proteomic Analysis of Glioblastoma cell-surface antigens
 
 $${\color{gray}Project\ works\ done\ for\ Mattias\ Belting's\ laboratory\ at\ Lund\ University}$$
 
-- [Integrative mRNA and Proteomic Analysis of Glioblastoma cell-surface antigens](#integrative-mrna-and-proteomic-analysis-of-glioblastoma-cell-surface-antigens)
-  - [Introduction](#introduction)
-  - [Project aims](#project-aims)
-  - [Sample Metadata Summary](#sample-metadata-summary)
-    - [Metadata Fields](#metadata-fields)
-  - [Setting Up the Environment](#setting-up-the-environment)
-    - [Directory tree](#directory-tree)
-    - [Environment prerequisits](#environment-prerequisits)
-  - [Raw data files](#raw-data-files)
-- [Bioinformatical pipeline](#bioinformatical-pipeline)
-  - [I. RNA-seq from cell lines (2D) and organoids (3D) grown under normoxia and hypoxia](#i-rna-seq-from-cell-lines-2d-and-organoids-3d-grown-under-normoxia-and-hypoxia)
-    - [Quality Control](#quality-control)
-    - [Read mapping](#read-mapping)
-    - [Prepare reference genome](#prepare-reference-genome)
+- [1. Integrative mRNA and Proteomic Analysis of Glioblastoma cell-surface antigens](#1-integrative-mrna-and-proteomic-analysis-of-glioblastoma-cell-surface-antigens)
+  - [1.1. Introduction](#11-introduction)
+  - [1.2. Project aims](#12-project-aims)
+  - [1.3. Sample Metadata Summary](#13-sample-metadata-summary)
+    - [1.3.1. Metadata Fields](#131-metadata-fields)
+  - [1.4. Setting Up the Environment](#14-setting-up-the-environment)
+    - [1.4.1. Directory tree](#141-directory-tree)
+    - [1.4.2. Environment prerequisits](#142-environment-prerequisits)
+  - [1.5. Raw data files](#15-raw-data-files)
+- [2. Bioinformatical pipeline](#2-bioinformatical-pipeline)
+  - [2.1. Quality Control](#21-quality-control)
+  - [2.2. Prepare reference genome](#22-prepare-reference-genome)
+  - [2.3. Read mapping](#23-read-mapping)
+    - [2.3.1 HISAT2](#231-hisat2)
+    - [2.3.2. Salmon](#232-salmon)
 
-## Introduction
+## 1.1. Introduction
 
 > [!NOTE]
 > *This section provide a brief overview of the biological background relevant to the research project and explain the biological problem being addressed, its significance in the field, and a summary of the approach or hypothesis being tested.*
@@ -28,16 +29,16 @@ At the same time, significant differences have been reported between the tumour 
 
 Genetic anomalies similarly play pivotal roles in tumour biology, contributing to the diversity and complexity of surface antigens. Gene fusions that can critically alter gene expression and protein function were found to be one of the major genomic abnormalities in glioblastoma. [(Shah et al., 2013)](https://doi.org/10.1186/1471-2164-14-818). By integrating these insights with the understanding of the tumour surfaceome and proteomic analyses, the project aims to uncover novel biomarkers and therapeutic targets, furthering the development of personalized treatments for glioblastoma that may include antibody-drug conjugates (ADCs) and CAR-T cells directed at cell-surface proteins.
 
-## Project aims
+## 1.2. Project aims
 
 By comparing mRNA expression levels across both 2D and 3D cell culture systems under normoxic and hypoxic conditions, this study aims to understand the effects of hypoxia on the expression of surfaceome and endocytome and how do the effects differ in 2D cultures and spheroids. Furthermore, the question how the mRNA expression correlates with the protein levels will be assessed by a complementary proteomic analysis ensuring a robust validation of transcriptional insights. Furthermore, the exploration of mRNA variants, including abnormal splicing patterns and unique mRNA junctions aims to identify novel biomarkers and therapeutic targets to be added to the group’s curated TS classifier (SURFME).
 
-## Sample Metadata Summary
+## 1.3. Sample Metadata Summary
 
 >[!NOTE]
 > *This section provides a summary of the sample metadata used in this study including: sample source, treatments or conditions applied, and library preparation parameters... essential for interpreting the results of the bioinformatics analyses.*
 
-### Metadata Fields
+### 1.3.1. Metadata Fields
 
 - **Sample ID**: Unique identifier for each sample.
 - **Sample name**: Name of the files
@@ -46,12 +47,12 @@ By comparing mRNA expression levels across both 2D and 3D cell culture systems u
 - **Index**: The adaptors used during the library preparation.
 - **Description**: Parameters of the reads - e.g.: *mean fragment length, min- and max fragment length, GC content, mean coverage, etc.*
 
-## Setting Up the Environment
+## 1.4. Setting Up the Environment
 
 >[!NOTE]
 > *To conduct the computational analyses required for this project, it's crucial to set up a consistent and reproducible environment. This section provides a guide through the process of setting up the computational environment: library tree, software dependencies and creating a virtual environment.*
 
-### Directory tree
+### 1.4.1. Directory tree
 ```bash
 .
 ├── README.md
@@ -72,7 +73,7 @@ By comparing mRNA expression levels across both 2D and 3D cell culture systems u
 │   └── ...
 └── workflow.sh
 ```
-### Environment prerequisits
+### 1.4.2. Environment prerequisits
 
 Download and install mamba through the recommended miniforge [installation](https://github.com/conda-forge/miniforge) process.
 ```bash
@@ -104,7 +105,7 @@ star                      2.7.11b              h43eeafb_1    bioconda
 trim-galore               0.6.10               hdfd78af_0    bioconda
 ```
 
-## Raw data files
+## 1.5. Raw data files
 
 First, writing permissin for all users has been removed from the files, to avoid ever overwriting them! Then, instead of reallocating them, considering disk space and GDPR compliance, a symbolic link to the file locations was created.
 
@@ -151,12 +152,10 @@ do
 done < <(tail -n +2 "${config_dir}/samples.csv") # skip the header
 ```
 
-# Bioinformatical pipeline 
-## I. RNA-seq from cell lines (2D) and organoids (3D) grown under normoxia and hypoxia
-$${\color{gray}-\ Compare\ gene\ expression\ under\ different\ growth\ conditions\ -}$$
+# 2. Bioinformatical pipeline 
+$${\color{gray}-\ Compare\ gene\ expression\ RNA-seq\ from\ cell\ lines\ (2D)\ and\ organoids\ (3D)\ grown\ under\ normoxia\ and\ hypoxia\ -}$$
 
-
-### Quality Control
+## 2.1. Quality Control
 This step involves the pre-processing of the data to remove:
 
 - adapter sequences (adapter trimming)
@@ -194,7 +193,7 @@ The arguments mean:
 - `--fastqc_args [ARGS]` – runs FastQC and passes down arguments in the form “arg1 arg2 etc.”, if we do not wish to pass extra arguments, FastQC in default mode can be invoked by `--fastqc` argument as well (***Either one should be called at a time!***).
 - `-o/--output_dir` – is used to specify where all output will be written.
 
-### Prepare reference genome
+## 2.2. Prepare reference genome
 
 Once the pre-processing and quality control steps are completed the resulting, high-quality data is ready for the read mapping or alignment step. Depending on the availability of a reference genome sequence, it can happen in one of two ways: 
 1. When studying an organism with a reference genome, it is possible to infer which transcripts are expressed by mapping the reads to the reference genome (Genome mapping) or transcriptome (Transcriptome mapping). Mapping reads to the genome requires no knowledge of the set of transcribed regions or the way in which exons are spliced together. This approach allows the discovery of new, unannotated transcripts.
@@ -246,12 +245,12 @@ cat ${ENSEMBL_TRANSCRIPTOME} ${ENSEMBL_GENOME} > <path/…/gentrome.fa>
 salmon index -t gentrome.fa -d decoys.txt -i <path/…/SALMON/> -k 13 -p ${threads}
 ```
 
-### Read mapping
+## 2.3. Read mapping
 
 > [!IMPORTANT]
 > **The most important parameter to get right is the strandedness of the library. Salmon can predict the library preparation method when used with the automatic library preparation tag `--libType "A"`. Executing an exploratory run with Salmon told that the library in unstranded (*"IU"*), however there is a very high mapping bias towards the reverse as in the case of more than 99% of the individual alignments the first read maps to the reverse strand (*"ISR"*). Consequentially, during the hisat2 alignment we use the option `--rna-strandedness "RF"`, that corresponds to the second-strand synthesis method (common for many Illumina kits), where R1 maps to the reverse strand of the DNA. During the Salmon qunatification we sat --libType 'ISR'.**
 
-**HISAT2**
+### 2.3.1 HISAT2
 
 We align the RNA-seq reads to a genome in order to identify exon-exon splice junctions with the help of the `alignReads.sh` script. The next downstream step would most likely be a genome-guided transcriptome assembly, so we use the --novel-splicesite-outfile mode to reports a list of splice sites in the file: chromosome name tab genomic position of the flanking base on the left side of an intron tab genomic position of the flanking base on the right tab strand (+, -, and .) ‘.’ indicates an unknown strand for non-canonical splice sites. During the alignment step the applied parameters mean:
 - `--phred33` – defines the input quality (*default: Phred+33*),
@@ -294,7 +293,7 @@ featureCounts -p --countReadPairs -s 0 -f -M -O -T ${cores} -a ${reference}/Homo
 -o "${output_dir}/${sample}.counts.txt" "${output_dir}/${sample}.sorted.bam"
 ```
 
-**Salmon**
+### 2.3.2. Salmon
 
 We quantify the reads directly in mapping-based mode against the prepared index using the `salmon quant` command. We introduced selective alignment with the `--validateMappings` flag to adopt a considerably more sensitive scheme for finding the potential mapping loci of a read, and score potential mapping loci using the dynamic programming chaining algorithm, SIMD, introduced in minimap2. We emply the pre-pepared decoy-aware transcriptome index to mitigate potential spurious mappings to unannotated genomic locuses with high sequence-similarity to the annotated transcriptome. For the mapping-based quantification the set parameters are:
 - `-l 'ISR'` – sets the library type to inward orientation ('I'), stranded ('S'), reverse-first ('R') protocol,
