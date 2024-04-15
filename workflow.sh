@@ -44,7 +44,19 @@ mkdir -p $qc_folder
 # Run the QC pipeline
 source bin/QC.sh -d $raw_data -o $qc_folder
 
-# Run the gene prediction pipeline
+# Adapter trimming
+echo "####################################"
+echo "Adapter trimming with TrimGalore    "
+echo "####################################"
+
+# Create the adapter trimming results directory
+trim_folder="results/02_trim"
+mkdir -p $trim_folder
+
+# Adapter trimming
+source bin/trimReads.sh -i config/samples.csv -o $trim_folder
+
+# Create reference genom index
 echo "####################################"
 echo "Create reference Grch38 genome index"
 echo "####################################"
@@ -52,11 +64,41 @@ echo "####################################"
 # Create the reference genome index folder
 ref_genome="grch38"
 mkdir -p "${ref_genome}"
-mkdir -p ${input_folder}/${ref_genome}
 
-source bin/makeGrch38.sh -d ${input_folder}/${ref_genome} -j 4 -b "hisat2_index"
-for i in $(ls ${input_folder}/${ref_genome}/*); 
+# Create reference genom index
+source bin/makeGrch38.sh -d ${ref_genome} -j 4 -b "hisat2_index"
+
+# mkdir -p ${input_folder}/${ref_genome}
+# source bin/makeGrch38.sh -d ${input_folder}/${ref_genome} -j 4 -b "hisat2_index"
+# cp -rs ${input_folder}/${ref_genome}/${name} ${ref_genome}/${name}
+
+
+# Salmon mapping-based quantification
+echo "####################################"
+echo "Salmon mapping-based quantification "
+echo "####################################"
+
+# Create the Salmon results forlder
+salmon_folder="results/03_salmon"
+
+# Salmon mapping-based quantification
+samples=$(cat "config/samples.csv" | cut -d ',' -f1 | sed 's/Sample_//g')
+
+while read -r sample
 do
-    name=$(basename $i)
-    ln -s ${input_folder}/${ref_genome}/${name} ${ref_genome}/${name}
-done
+    if [ $sample == "Sample" ]
+    then
+        # Skip the header line
+        continue
+    fi
+       
+    # Read the trimmed forward and reverse reads
+    echo "Aligning reads with Hisat2 on sample: ${sample}"
+    fw_read=$(ls ${input_dir}/${sample}_R1_001_val_1.fq)
+    rv_read=$(ls ${input_dir}/${sample}_R2_001_val_2.fq)
+    # Align reads with Hisat2
+    hisat2 --phred33 --dta --non-deterministic -p 4 -x grch38/hisat/grch38_index -1 ${fw_read} -2 ${rv_read} -S ${output_dir}/${sample}.sam
+done <<< "${samples}"
+
+
+

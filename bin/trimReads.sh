@@ -4,13 +4,13 @@
 while getopts i:o: flag
 do
     case "${flag}" in
-        i) input_dir=${OPTARG};;
+        i) input=${OPTARG};;
         o) output_dir=${OPTARG};;
     esac
 done
 
 # Read in files from the input directory and trim illumina adapters with trim galore
-if [ -d "$input_dir" ]
+if [ -f "$input" ]
 then
     # Create the output directory if it does not exist
     if [ ! -d "$output_dir" ]
@@ -19,7 +19,7 @@ then
     fi
 
     # Loop through the files in the input directory
-    samples=$(cat config/samples.csv | cut -d ',' -f1 | sed 's/Sample_//g')
+    samples=$(cat ${input} | cut -d ',' -f1 | sed 's/Sample_//g')
 
     while read -r sample
     do
@@ -35,5 +35,5 @@ then
         trim_galore ${fw_read} ${rv_read} -j 4 -q 20 --length 36 --paired --illumina -o ${output_dir} 
     done <<< "${samples}"
 else
-    echo "Input directory does not exist"
+    echo "Input file does not exist"
 fi
