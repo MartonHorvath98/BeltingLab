@@ -1,10 +1,12 @@
 #! bin/bash
 
 # Take user arguments: input directory and output directory
-while getopts i:o: flag
+while getopts i:p:o: flag
 do
     case "${flag}" in
-        i) input=${OPTARG};;
+        c) input=${OPTARG};;
+        i) input_dir=${OPTARG};;
+        p) threads=${OPTARG};;
         o) output_dir=${OPTARG};;
     esac
 done
@@ -32,7 +34,7 @@ then
         fw_read=$(ls ${input_dir}/${sample}_R1_001.fastq)
         rv_read=$(ls ${input_dir}/${sample}_R2_001.fastq)
         
-        trim_galore ${fw_read} ${rv_read} -j 4 -q 20 --length 36 --paired --illumina -o ${output_dir} 
+        trim_galore ${fw_read} ${rv_read} -j ${threads} -q 20 --length 36 --paired --illumina -o ${output_dir} 
     done <<< "${samples}"
 else
     echo "Input file does not exist"

@@ -5,7 +5,7 @@ while getopts i:c:o: flag
 do
     case "${flag}" in
         i) input_dir=${OPTARG};;
-        c) config_dir=${OPTARG};;
+        c) config_file=${OPTARG};;
         o) output_dir=${OPTARG};;
     esac
 done
@@ -20,9 +20,9 @@ then
     fi
 
     # Create the samples.tsv file if it does not exist
-    if [ ! -f "${config_dir}/samples.csv" ]
+    if [ ! -f "${config_file}" ]
     then    
-        echo -e "Sample,Forward read,Reverse read" > "${config_dir}/samples.csv"
+        echo -e "Sample,Forward read,Reverse read" > "${config_file}"
         # Loop through the files in the input directory
         samples=$(ls -d ${input_dir}Sample_*)
         while read -r sample
@@ -32,7 +32,7 @@ then
         fw_read=$(ls ${sample}/*_R1_001.fastq.gz)
         rv_read=$(ls ${sample}/*_R2_001.fastq.gz)
 
-        echo -e "$name,$fw_read,$rv_read" >> "${config_dir}/samples.csv"
+        echo -e "$name,$fw_read,$rv_read" >> "${config_file}"
         done <<< "$samples"
     fi
 
@@ -47,7 +47,7 @@ then
         echo "Subsampling reads for sample: $sample"
         seqtk sample -s100 $fw_read 10000 > "${output_dir}/$(basename ${fw_read})"
         seqtk sample -s100 $rv_read 10000 > "${output_dir}/$(basename ${rv_read})"
-    done < <(tail -n +2 "${config_dir}/samples.csv")
+    done < <(tail -n +2 "${config_file}")
 
 else
     echo "Input directory does not exist"
