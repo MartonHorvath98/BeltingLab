@@ -17,6 +17,7 @@ $${\color{gray}Project\ works\ done\ for\ Mattias\ Belting's\ laboratory\ at\ Lu
   - [2.3. Read mapping](#23-read-mapping)
     - [2.3.1 HISAT2](#231-hisat2)
     - [2.3.2. Salmon](#232-salmon)
+  - [2.4. Create report](#24-create-report)
 
 ## 1.1. Introduction
 
@@ -265,7 +266,7 @@ We align the RNA-seq reads to a genome in order to identify exon-exon splice jun
 
 Following the alingment step, **Samtools (v.1.19.2)**, channeled through the piping operator '|', instantly converts the .sam files produced by the aligner to their binary counterpart .bam, which limits space requirements as the output file size shrinks considerably via `samtools view -h -bS > <path/…/file.bam>`. Then using the `samtools sort` and `index` command the bam files are sorted along the reference, and BAI-format index is generated. Finally,  **featureCounts (v.2.0.6)** takes as input the BAM files and the genome annotation file in GFF format containing the chromosomal coordinates of features. It outputs numbers of reads assigned to features or meta-features. Each entry in the GFF annotation file is considered a feature (e.g. an exon), while a meta-feature is the aggregation of a set of features (e.g. a gene). When summarising reads at meta-feature level, read counts obtained for features included in the same meta-feature will be added up to yield the read count for the corresponding meta-feature. It also outputs stat info for the overall summarization results, including number of successfully assigned reads and number of reads that failed to be assigned due to various reasons (these reasons are included in the stat info). While counting how many reads align to each gene in a genome annotation the set parameters are:
 - `-p` – specifies that input data contain paired-end reads and performs fragment counting (ie. counting read pairs), the `--countReadPairs` parameter should also be specified in addition to this parameter
-- `-s [INT]` – determines the strand-specificity of the read counting (*here: 0 (unstranded)*),
+- `-s [INT]` – determines the strand-specificity of the read counting (*here: 2 (reversely stranded)*),
 - `-f` – performs read counting at feature level (eg. counting reads for exons rather than genes),
 - `-O` –  assigns reads to all their overlapping features (or meta-features if -f is not specified),
 - `-M` – multi-mapping reads will also be counted,
@@ -308,3 +309,34 @@ We quantify the reads directly in mapping-based mode against the prepared index 
 # Align reads with Salmon
 salmon quant -l 'ISR' -i ${reference} -1 ${fw_read} -2 ${rv_read} -p ${threads} --seqBias --validateMappings -o ${output_dir}/${sample}
 ```
+
+## 2.4. Create report
+
+> [!NOTE]
+> It is important to check the quality of the mapping process. Either with a reference or de novo assembly, the complete reconstruction of transcriptomes using short reads is challenging, they sometimes align equally well to multiple locations (multi-mapped reads or multi-reads). Paired-end reads reduce the problem of multi-mapping, because a pair of reads must map within a certain distance of each other and in a certain order. The percentage of mapped reads is a global indicator of the overall sequencing accuracy and of the presence of contaminating DNA.
+
+As a last step we produce statistics to gather the necessary information about the success of the alignment with **Picard tools (v.3.1.1)**, using the following commands:
+- `CollectAlignmentSummaryMetrics`- produces a summary of alignment metrics from the sorted BAM files, detailing the quality of the read alignments as well as the proportion of the reads that passed machine signal-to-noise threshold quality filters (*specific to Illumina data*),
+- `CollectInsertSizeMetrics` - collect metrics about the insert size distribution of a paired-end library, useful for validating library construction including the insert size distribution and read orientation of paired-end libraries (*the expected proportions of these metrics vary depending on the type of library preparation used, resulting from technical differences between pair-end libraries and mate-pair libraries*),
+- `CollectGcBiasMetrics` - collect metrics regarding GC bias: the relative proportions of guanine (G) and cytosine (C) nucleotides in a sample. Regions of high and low G + C content have been shown to interfere with mapping/aligning, ultimately leading to fragmented genome assemblies and poor coverage in a phenomenon known as 'GC bias'.
+
+```bash
+# Extract alignment metrics with Picard
+${PICARD_EXE} CollectAlignmentSummaryMetrics I="${sample}" O="${picard_output}/${name}/alignment_metrics.txt"
+
+# Extract insert size metrics with Picard
+${PICARD_EXE} CollectInsertSizeMetrics I="${sample}" O="${picard_output}/${name}/insert_size_metrics.txt" \
+H="${picard_output}/${name}/insert_size_histogram.pdf"
+
+# Extract GC bias metrics with Picard
+${PICARD_EXE} CollectGcBiasMetrics I=${sample} O="${picard_output}/${name}/gc_bias_metrics.txt" \
+CHART="${picard_output}/${name}/gc_bias_chart.pdf" S="${picard_output}/${name}/gc_summary.txt"
+```
+
+Last but not least, we parse summary statistics from results and log files generated by all other bioinformatics tools with **MultiQC (v.1.10.1)**. MultiQC recursively searches through any provided file paths and finds files that it recognises. It parses relevant information from these and generates a single stand-alone HTML report file. Furthermore, a multiqc_data folder will be generated as well with the reformatted compact data tables in there, one from each module in TSV format, as well as a verbose multiqc.log file and a multiqc_data.json. MultiQC's highly collaborative modules can work with the log files produced during the analysis:
+- **Cutadapt** – this module summarizes found and removed adapter sequences, primers, poly-A tails and other types of unwanted sequences, 
+- **FastQC** – the quality control module generates similar plots, which are included in the default HTML report as well. An additional fastqc_data.txt is generated too that can be helpful for downstream analysis as it is relatively easy to parse,
+- **Hisat2** – module parses summary statistics if option `--new-summary` has been specified,
+- **featureCounts** – module parses results generated by featureCounts, visualizes the reads mapped to genes, exons, promoter, gene bodies, genomic bins, chromosomal locations or other features. The filenames must end in *'.summary'* to be discovered.
+
+Whilst MultiQC is typically used as a final reporting step in an analysis, it can also be used as an intermediate in your analysis, as these files essentially standardize the outputs from a lot of different tools and make them useful for downstream analysis. We will do that as well, going one step further with the TidyMultiqc package. The TidyMultiqc package provides the means to convert the multiqc_data.json file into a tidy data frame for downstream analysis in R. 

@@ -11,6 +11,16 @@ do
     esac
 done
 
+# Check command executable paths
+PICARD_EXE=./picard.jar
+if [ ! -x "$PICARD_EXE" ] ; then
+	if ! which picard ; then
+		echo "Could not find Picard tools in current directory or in PATH"
+		exit 1
+	else
+		PICARD_EXE=`which picard`
+	fi
+fi
 # Extract alignment metrics with picard tools from the sorted bam files
 if [ -d "$bam_dir" ]
 then
@@ -19,13 +29,17 @@ then
     while read -r sample
     do
         echo "Extracting alignment metrics with Picard on sample: $(basename $sample)"
-        # Extract alignment metrics with Picard
+        # Create output folder
         name=$(basename $sample)
         mkdir -p ${picard_output}/${name}
-        picard CollectAlignmentSummaryMetrics I=$sample O=${picard_output}/${name}/alignment_metrics.txt
+        # Extract alignment metrics with Picard
+        ${PICARD_EXE} CollectAlignmentSummaryMetrics I=$sample O=${picard_output}/${name}/alignment_metrics.txt
         # Extract insert size metrics with Picard
-        picard CollectInsertSizeMetrics I=$sample O=${picard_output}/${name}/insert_size_metrics.txt H=${picard_output}/${name}/insert_size_histogram.pdf
-        picard CollectGcBiasMetrics I=$sample O=${picard_output}/${name}/gc_bias_metrics.txt CHART=${picard_output}/${name}/gc_bias_chart.pdf S=${picard_output}/${name}/gc_summary.txt
+        ${PICARD_EXE} CollectInsertSizeMetrics I=$sample O=${picard_output}/${name}/insert_size_metrics.txt \
+        H=${picard_output}/${name}/insert_size_histogram.pdf
+        # Extract GC bias metrics with Picard
+        ${PICARD_EXE} CollectGcBiasMetrics I=$sample O=${picard_output}/${name}/gc_bias_metrics.txt \
+        CHART=${picard_output}/${name}/gc_bias_chart.pdf S=${picard_output}/${name}/gc_summary.txt
     done <<< "$samples"
 fi
 
