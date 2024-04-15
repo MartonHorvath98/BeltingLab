@@ -194,7 +194,7 @@ The arguments mean:
 - `--fastqc_args [ARGS]` – runs FastQC and passes down arguments in the form “arg1 arg2 etc.”, if we do not wish to pass extra arguments, FastQC in default mode can be invoked by `--fastqc` argument as well (***Either one should be called at a time!***).
 - `-o/--output_dir` – is used to specify where all output will be written.
 
-### Read mapping
+### Prepare reference genome
 
 Once the pre-processing and quality control steps are completed the resulting, high-quality data is ready for the read mapping or alignment step. Depending on the availability of a reference genome sequence, it can happen in one of two ways: 
 1. When studying an organism with a reference genome, it is possible to infer which transcripts are expressed by mapping the reads to the reference genome (Genome mapping) or transcriptome (Transcriptome mapping). Mapping reads to the genome requires no knowledge of the set of transcribed regions or the way in which exons are spliced together. This approach allows the discovery of new, unannotated transcripts.
@@ -203,17 +203,16 @@ Once the pre-processing and quality control steps are completed the resulting, h
 >[!NOTE]
 >*In this case, we follow the aprroach remains genome mapping, followed by building a more accurate, splicing-sensitive transcriptome in a genome-guided manner, and then to increase the number of mapped reads by aligning them to the assembled transcriptome. However, these steps will only happen as part of the later workflow to identify gene fusions, and mutated genes.*
 
-There are many bioinformatics tools available to perform the alignment of short reads. Here, the one used is Hisat2, one of the most popular mapper tools, which stands for “hierarchical indexing for spliced alignment of transcripts 2”. Hisat2 provides fast and sensitive alignment, in a splice-sensitive manner, which makes it ideal for aligning RNA-samples. Besides Hisat2, read will also be aligned with quasi-mapper, Salmon. The technique employed by Salmon rapidly approximates the positions where reads might originate from the transcriptome without producing an explicit alignment of reads to the genome allowing a rapid quantification of gene expression levels.
+There are many bioinformatics tools available to perform the alignment of short reads. Here, the one used is **Hisat2 (v.2.2.1)**, one of the most popular mapper tools, which stands for “hierarchical indexing for spliced alignment of transcripts 2”. Hisat2 provides fast and sensitive alignment, in a splice-sensitive manner, which makes it ideal for aligning RNA-samples. Besides Hisat2, read will also be aligned with quasi-mapper, **Salmon (v.1.10.1)**. The technique employed by Salmon rapidly approximates the positions where reads might originate from the transcriptome without producing an explicit alignment of reads to the genome allowing a rapid quantification of gene expression levels.
 
 >[!NOTE]
 >*Besides the mapper algorithms, we will use Samtools for processing and analysing the data. It includes tools for file format conversion and manipulation, sorting, querying, and statistics amongst other methods.*
 
-### Prepare reference genome
+Indexes for the hisat2 and salmon aligners are created using the `makeGrch38.sh` script. The hisat2-build command will create eight files with the extensions *.1.ht2, .2.ht2, .3.ht2, .4.ht2, .5.ht2, .6.ht2, .7.ht2* and *.8.ht2*. These files together are the index for hisat2. Because the plans include heavy focus on alternative splicing and gene fusion events, the genome index is created with transcript annotations using the `--ss` and `--exon` flags. These take into account the prepared exons and splice sites, in HISAT2's own format (three or four tab-separated columns).
 
 >[!IMPORTANT]
 >***It is crucial to download the same reference in .fasta and .gff format from the same origin, to avoid conflicts in later steps of the analysis pipeline. Here, the GRCh38 release version v.108 (2022 Oct) of H. sapiens (human) from Ensembl is used as reference.***
 
-Indexes for the hisat2 and salmon aligners are created using the `makeGrch38.sh` script. The hisat2-build command will create eight files with the extensions *.1.ht2, .2.ht2, .3.ht2, .4.ht2, .5.ht2, .6.ht2, .7.ht2* and *.8.ht2*. These files together are the index for hisat2. Because the plans include heavy focus on alternative splicing and gene fusion events, the genome index is created with transcript annotations using the `--ss` and `--exon` flags. These take into account the prepared exons and splice sites, in HISAT2's own format (three or four tab-separated columns).
 ```bash
 # The Ensembl release version and base URLs for downloads
 ENSEMBL_RELEASE=108
@@ -232,7 +231,7 @@ hisat2_extract_exons.py -v <path/…/ref.gtf> > <path/…/exons.tsv>
 hisat-build -p ${threads} --seed 100 ${ENSEMBL_GENOME} --ss <path/…/splicesite.tsv> --exon  <path/…/exons.tsv>  <path/…/HISAT/base_name>
 ```
 
-To get accurate quantification estimates with Salmon in mapping-based mode a salmon index for the transcriptome has to be built as well. We build the recommended, decoy-aware transcriptome file, using the entire genome of the organism (Grch38) as the decoy sequence. This is achieved by concatenating the genome to the end of the transcriptome before indexing. Salmon indexing also requires populating the decoys.txt file with the chromosome names, which is extractable by using the `grep` command. This scheme provides a more comprehensive set of decoys, but, obviously, requires considerably more memory to build the index. We can run salmon indexing step, with the same ensemble reference files, as follows:
+To get accurate quantification estimates with Salmon in mapping-based mode a salmon index for the transcriptome has to be built as well. We build the recommended, decoy-aware transcriptome file, using the entire genome of the organism (Grch38) as the decoy sequence. This is achieved by concatenating the genome to the end of the transcriptome before indexing. Salmon indexing also requires populating the decoys.txt file with the chromosome names, which is extractable by using the `grep` command. This scheme provides a more comprehensive set of decoys, but, obviously, requires considerably more memory to build the index. This will build the mapping-based index, using an auxiliary k-mer hash (*default: k-mers of length 31*), that will also act as the minimum acceptable length for a valid match. Running an exploratory mapping step, we found low alignment rate (= appx. 40%), thus a smaller value of k is set to improve sensitivity even more using selective alignment in the later steps (enabled via the `–validateMappings` flag). We can run salmon indexing step, with the same ensemble reference files, as follows:
 
 >[!IMPORTANT] 
 > The genome targets (decoys) should come after the transcriptome targets in the reference!
@@ -244,5 +243,69 @@ grep "^>" ${ENSEMBL_GENOME} | cut -d " " -f 1 | sed -e 's/>//g' > <path/…/deco
 cat ${ENSEMBL_TRANSCRIPTOME} ${ENSEMBL_GENOME} > <path/…/gentrome.fa>
 
 # Build Salmon index
-salmon index -t gentrome.fa -d decoys.txt -i <path/…/SALMON/> -k 31 -p ${threads}
+salmon index -t gentrome.fa -d decoys.txt -i <path/…/SALMON/> -k 13 -p ${threads}
+```
+
+### Read mapping
+
+> [!IMPORTANT]
+> **The most important parameter to get right is the strandedness of the library. Salmon can predict the library preparation method when used with the automatic library preparation tag `--libType "A"`. Executing an exploratory run with Salmon told that the library in unstranded (*"IU"*), however there is a very high mapping bias towards the reverse as in the case of more than 99% of the individual alignments the first read maps to the reverse strand (*"ISR"*). Consequentially, during the hisat2 alignment we use the option `--rna-strandedness "RF"`, that corresponds to the second-strand synthesis method (common for many Illumina kits), where R1 maps to the reverse strand of the DNA. During the Salmon qunatification we sat --libType 'ISR'.**
+
+**HISAT2**
+
+We align the RNA-seq reads to a genome in order to identify exon-exon splice junctions with the help of the `alignReads.sh` script. The next downstream step would most likely be a genome-guided transcriptome assembly, so we use the --novel-splicesite-outfile mode to reports a list of splice sites in the file: chromosome name tab genomic position of the flanking base on the left side of an intron tab genomic position of the flanking base on the right tab strand (+, -, and .) ‘.’ indicates an unknown strand for non-canonical splice sites. During the alignment step the applied parameters mean:
+- `--phred33` – defines the input quality (*default: Phred+33*),
+- `--dta` – (=downstream-transcriptome-assembly) report alignments tailored for transcript assemblers including StringTie,
+- `--p [INT]` – sets INT number of cores to be used during the calculations,
+- `--non-deterministic` – Hisat2 re-initializes its pseudo-random generator for each read using the current time, meaning that Hisat2 will not necessarily report the same alignment for two identical reads. This might be more appropriate in situations where the input consists of many identical reads,
+- `--rna-strandedness 'RF'` – is used to define the strand-specificity of the RNA-seq protocol,
+- `--x` – the path to the index for the reference genome including the basename of the files excluding the *.1.ht2 / etc.* extension,
+- `--1` and `--2` – are comma-separated list of files containing mate 1s and mate 2s,
+- `--summary-file` – sets the path to the summary file,
+- `--new-summary` – makes the summary file readable by MultiQC for downstream analysis.
+
+Following the alingment step, **Samtools (v.1.19.2)**, channeled through the piping operator '|', instantly converts the .sam files produced by the aligner to their binary counterpart .bam, which limits space requirements as the output file size shrinks considerably via `samtools view -h -bS > <path/…/file.bam>`. Then using the `samtools sort` and `index` command the bam files are sorted along the reference, and BAI-format index is generated. Finally,  **featureCounts (v.2.0.6)** takes as input the BAM files and the genome annotation file in GFF format containing the chromosomal coordinates of features. It outputs numbers of reads assigned to features or meta-features. Each entry in the GFF annotation file is considered a feature (e.g. an exon), while a meta-feature is the aggregation of a set of features (e.g. a gene). When summarising reads at meta-feature level, read counts obtained for features included in the same meta-feature will be added up to yield the read count for the corresponding meta-feature. It also outputs stat info for the overall summarization results, including number of successfully assigned reads and number of reads that failed to be assigned due to various reasons (these reasons are included in the stat info). While counting how many reads align to each gene in a genome annotation the set parameters are:
+- `-p` – specifies that input data contain paired-end reads and performs fragment counting (ie. counting read pairs), the `--countReadPairs` parameter should also be specified in addition to this parameter
+- `-s [INT]` – determines the strand-specificity of the read counting (*here: 0 (unstranded)*),
+- `-f` – performs read counting at feature level (eg. counting reads for exons rather than genes),
+- `-O` –  assigns reads to all their overlapping features (or meta-features if -f is not specified),
+- `-M` – multi-mapping reads will also be counted,
+- `-T [INT]` – specifies the number of threads to be used,
+- `-a` – is a mandatory argument, the path to the annotation file,
+- `-o` –  is the path to and name of the output file that includes the read counts and a separate file with summary statistics.
+
+```bash
+ # Align reads with Hisat2
+hisat2 --phred33 --dta --non-deterministic -p ${cores} --novel-splicesite-outfile "${output_dir}/${sample}/novel_splicesite.txt"\
+--summary-file "${output_dir}/${sample}/stats.txt" --new-summary -x ${reference}/hisat/${base_name} -1 ${fw_read} -2 ${rv_read} |\
+samtools view -h -bS > "${output_dir}/${sample}.bam"
+
+# Sort the bam file
+samtools sort -@ ${cores} -o "${output_dir}/${sample}.sorted.bam" "${output_dir}/${sample}.bam"
+
+# Index the sorted bam file
+samtools index "${output_dir}/${sample}.sorted.bam"
+
+# Remove the unsorted bam file
+rm "${output_dir}/${sample}.bam"
+
+# Calculate readcounts with featureCounts
+featureCounts -p --countReadPairs -s 0 -f -M -O -T ${cores} -a ${reference}/Homo_sapiens.GRCh38.gff\
+-o "${output_dir}/${sample}.counts.txt" "${output_dir}/${sample}.sorted.bam"
+```
+
+**Salmon**
+
+We quantify the reads directly in mapping-based mode against the prepared index using the `salmon quant` command. We introduced selective alignment with the `--validateMappings` flag to adopt a considerably more sensitive scheme for finding the potential mapping loci of a read, and score potential mapping loci using the dynamic programming chaining algorithm, SIMD, introduced in minimap2. We emply the pre-pepared decoy-aware transcriptome index to mitigate potential spurious mappings to unannotated genomic locuses with high sequence-similarity to the annotated transcriptome. For the mapping-based quantification the set parameters are:
+- `-l 'ISR'` – sets the library type to inward orientation ('I'), stranded ('S'), reverse-first ('R') protocol,
+- `-i [PATH]` –  the path to the reference genome index,
+- `-1` and `-2` –  mate 1s and mate 2s reads,
+- `-p [INT]` – specifies the number of threads to be used,
+- `--seqBias` – performs sequence-specific bias correction,
+- `--validateMappings` – calls selective alignment,
+- `-o` – is the path to the output folder where the quantification file (called quant.sf), the command information file (called cmd_info.json) and a file (called lib_format_counts.json) with the number of fragments that had at least one mapping compatible with the designated library format are saved.
+
+```bash
+# Align reads with Salmon
+salmon quant -l 'ISR' -i ${reference} -1 ${fw_read} -2 ${rv_read} -p ${threads} --seqBias --validateMappings -o ${output_dir}/${sample}
 ```
