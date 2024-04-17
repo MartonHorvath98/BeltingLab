@@ -4,7 +4,6 @@ channels:
   - bioconda
   - defaults
 dependencies:
-  - star=2.7.11b
   - seqtk=1.4
   - fastqc=0.12.1
   - trim-galore=0.6.10

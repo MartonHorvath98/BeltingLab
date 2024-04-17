@@ -28,3 +28,6 @@ results/
 
 # Reference genome
 grch38/
+
+# UPPMAX workflow
+sbatch_workflow.sh
