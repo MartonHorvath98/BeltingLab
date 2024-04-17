@@ -89,7 +89,7 @@ if [ ! -x "$SALMON_EXE" ] ; then
 		SALMON_EXE=`which salmon`
 	fi
 fi
-## 5. Salmon
+## 5. Gff2bed
 BED_EXE=./gff2bed
 if [ ! -x "$BED_EXE" ] ; then
 	if ! which gff2bed ; then
@@ -97,6 +97,16 @@ if [ ! -x "$BED_EXE" ] ; then
 		exit 1
 	else
 		SALMON_EXE=`which gff2bed`
+	fi
+fi
+## 6. STAR
+STAR_EXE=./STAR
+if [ ! -x "$STAR_EXE" ] ; then
+	if ! which STAR ; then
+		echo "Could not find STAR in current directory or in PATH"
+		exit 1
+	else
+		STAR_EXE=`which STAR`
 	fi
 fi
 
@@ -189,16 +199,28 @@ cat ${TRANSCRIPTOME} ${GENOME} > gentrome.fa
 SALMON_INDEX="${SALMON_EXE} index -t gentrome.fa -d decoys.txt -i ${SALMON_DIR} -k 13 -p ${threads}"
 echo Running $SALMON_INDEX
 if $SALMON_INDEX ; then
-	rm gentrome.fa
+	# Remove concatenated transcriptome and genome
+	rm -f decoys.txt.bak gentrome.fa
 	echo "Salmon index built"
 else
 	echo "Index building failed; see error message"
 fi
 
-# Remove concatenated transcriptome and genome
-rm gentrome.fa
+echo "##########################################################"
+echo "# 6. Build STAR index                                    #"
+echo "##########################################################"
+# Create STAR index directory
+STAR_DIR=${dir}/star_index && mkdir -p ${STAR_DIR}
+# Build STAR index
+STAR="${STAR_EXE} --runThreadN ${threads} --runMode genomeGenerate --genomeDir ${STAR_DIR}\
+--genomeFastaFiles ${GENOME} --sjdbGTFfile ${GFF%.gff}.gtf --sjdbOverhang 100"
+echo Running $STAR
+if $STAR ; then
+	echo "STAR index built"
+else
+	echo "Index building failed; see error message"
+fi
 
 echo "##########################################################"
-echo "# 6. Indexing complete                                   #"
+echo "# 7. Indexing complete                                   #"
 echo "##########################################################"
-echo "You may now use the reference genome with HISAT2, Salmon, and other tools."

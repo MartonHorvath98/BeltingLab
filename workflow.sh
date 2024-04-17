@@ -1,9 +1,4 @@
-#! bin/bash -l 
-#SBATCH -A sens2020018
-#SBATCH -p core -n 32
-#SBATCH -t 48:00:00
-#SBATCH -J rna-core
-
+#! bin/bash 
 # Marton Horvath, April 2024
 
 # ------------ Take user arguments ------------ #
@@ -28,6 +23,8 @@ mamba activate glioblastoma
 # Set the number of cores
 CORES=32
 SAMPLES="config/samples.csv"
+REFERENCE="data/grch38"
+
 
 # ------------ Run the workflow ------------ #
 # Run the QC pipeline
@@ -77,36 +74,46 @@ echo "####################################"
 echo "Create reference Grch38 genome index"
 echo "####################################"
 
-# Create the reference genome index folder
-ref_genome="data/grch38"
-mkdir -p ${ref_genome}
+if [ -d $REFERENCE ]
+then
+    echo "Reference genome index already exists"
+else
+    # Create the reference genome index folder
+    mkdir -p ${REFERENCE}
 
-# Create reference genom index
-source bin/makeGrch38.sh -d ${ref_genome} -j ${CORES} -b "hisat2_index"
+    # Create reference genom index
+    source bin/makeGrch38.sh -d ${REFERENCE} -j ${CORES} -b "hisat2_index"
+fi
 
 # Salmon mapping-based quantification
-echo "####################################"
-echo "Salmon mapping-based quantification "
-echo "####################################"
+echo "#########################################################"
+echo "STAR alignment with salmon alignment-based quantification"
+echo "#########################################################"
 
+# Create the STAR results forlder
+star_folder="results/03_star"
+mkdir -p ${star_folder}
 # Create the Salmon results forlder
-salmon_folder="results/03_salmon"
+salmon_folder="results/04_salmon"
 mkdir -p ${salmon_folder}
 
-# Salmon mapping-based quantification
-source bin/alignReads.sh -i ${trim_folder} -m "Salmon" -j ${CORES} -r ${ref_genome} -o ${salmon_folder}
+# STAR mapping && Salmon quantification
+source bin/alignSTAR.sh -i ${trim_folder} -j ${CORES} -r ${REFERENCE} -s ${star_folder} -o ${salmon_folder}
 
 # Hisat2 alignment
-echo "####################################"
-echo "Splice-aware alignment with Hisat2  "
-echo "####################################"
+echo "###############################################################"
+echo "Hisat2 splice-aware alignment with featureCounts quantification"
+echo "###############################################################"
 
 # Create the Hisat2 results directory
-hisat2_folder="results/04_hisat2"
+hisat_folder="results/05_hisat"
 mkdir -p ${hisat2_folder}
+# Create the featureCounts results directory
+count_folder="results/06_counts"
+mkdir -p ${count_folder}
 
 # Hisat2 alignment
-source bin/alignReads.sh -i ${trim_folder} -m "Hisat2" -j ${CORES} -r ${ref_genome} -b "grch38_index" -o ${hisat2_folder}
+source bin/alignHisat.sh -i ${trim_folder} -j ${CORES} -r ${ref_genome} -b "grch38_index" -o ${hisat2_folder} -c ${count_folder}
 
 # Create final report
 echo "####################################"
@@ -114,9 +121,9 @@ echo "Create final report                 "
 echo "####################################"
 
 # Create the final report directory
-picard_folder="results/05_picard"
+picard_folder="results/07_picard"
 mkdir -p ${picard_folder}
-report_folder="results/06_report"
+report_folder="results/08_report"
 mkdir -p ${report_folder}
 
 # Create the final report
