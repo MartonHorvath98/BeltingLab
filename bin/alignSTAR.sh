@@ -1,7 +1,7 @@
 #! bin/bash
 
 # Take user arguments: input-, config- and output directories, mode, reference, base_name and cores
-while getopts i:j:r:b:o: flag
+while getopts i:j:r:s:o: flag
 do
     case "${flag}" in
         i) input_dir=${OPTARG};;
@@ -38,7 +38,7 @@ fi
 # ------- Run the algorithms -------
 # Read in files from the input directory and align reads with Hisat2
 if [ -d "$input_dir" ]
-then
+then  
     # Align sequences with STAR
     while read -r sample
     do
@@ -56,10 +56,20 @@ then
         $STAR_EXE --runThreadN ${threads} \
             --genomeDir "${reference}/star_index" \
             --readFilesIn ${fw_read} ${rv_read} \
+            --outReadsUnmapped None \
             --outSAMtype BAM Unsorted \
+            --outSAMstrandField intronMotif \
+            --outSAMunmapped Within \
             --outFileNamePrefix "${star_output}/${sample}-" \
-            --chimSegmentMin 20 \
-            --chimOutType WithinBAM
+            --twopassMode Basic \
+            --chimOutType WithinBAM \
+            --chimSegmentMin 12 \
+            --chimJunctionOverhangMin 8 \
+            --chimOutJunctionFormat 1 \
+            --alignSJDBoverhangMin 10 \
+            --alignMatesGapMax 100000 \
+            --alignIntronMax 100000 \
+            --alignSJstitchMismatchNmax 5 -1 5 5 
     done <<< "${SAMPLES}"
 
     # Quantify STAR alignments with Salmon
@@ -76,12 +86,12 @@ then
         echo "Quantifying features with Salmon on sample: ${sample}"
         alignment=$(ls ${star_output}/${sample}-Aligned.out.bam)
         # Align reads with Salmon
-        $SALMON_EXE quant -l 'ISR' \
-            -t "${reference}/HomHomo_sapiens.GRCh38.fa" \
+        $SALMON_EXE quant -l ISR \
+            -t "${reference}/Homo_sapiens.GRCh38.fa" \
             -g "${reference}/Homo_sapiens.GRCh38.gtf" \
             -a ${alignment} -p ${threads} \
             --seqBias \
-            -o ${output_dir}/${sample}
+            -o ${salmon_output}/${sample}
 
         # extract libtype from the  ${output_dir}/${sample}/lib_format_counts.json file
         # LIBTYPE=$(cat ${output_dir}/${sample}/lib_format_counts.json | grep -Po '(?<="expected_format": ).*(?=,)')
