@@ -2,19 +2,6 @@
 
 # Downloads sequence for the GRCh38 release version v.108 (2022 Oct)
 # of H. sapiens (human) from Ensembl.
-#
-# Note that Ensembl's GRCh38 build has three categories of compressed fasta
-# files:
-# 'dna' - unmasked genomic DNA sequences.
-# 'dna_rm' - masked genomic DNA.  Interspersed repeats and low complexity regions
-#			 are detected with the RepeatMasker tool and masked with 'N's.
-# 'dna_sm' - soft-masked genomic DNA. All repeats and low complexity regions have
-#			 been replaced with lowercased versions of their nucleic base.
-#
-# By default, this script builds and index for just the unmasked files at the primary 
-# assembly level, that contains all toplevel sequence regions excluding haplotypes
-# and patches.
-#! bin/bash
 
 # Take user arguments: input directory
 while getopts d:j:b: flag
