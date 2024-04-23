@@ -1,7 +1,7 @@
 #! bin/bash
 
 # Take user arguments: input-, config- and output directories, mode, reference, base_name and cores
-while getopts i:j:r:b:o: flag
+while getopts i:j:r:b:o:c: flag
 do
     case "${flag}" in
         i) input_dir=${OPTARG};;
@@ -78,7 +78,7 @@ then
         rm "${hisat_output}/${sample}.bam"
 
         # Calculate readcounts with featureCounts
-        $COUNTS_EXE -p --countReadPairs -s 2 -f -M -O -T ${threads} -a ${reference}/Homo_sapiens.GRCh38.gff\
+        $COUNTS_EXE -p --countReadPairs -s 2 -T ${threads} -a ${reference}/Homo_sapiens.GRCh38.gtf\
         -o "${count_output}/${sample}.counts.txt" "${hisat_output}/${sample}.sorted.bam"
     done <<< "${SAMPLES}"
 else
