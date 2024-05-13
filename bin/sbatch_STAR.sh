@@ -63,11 +63,11 @@ if [ -d "$INPUT_DIR" ]
 then
     for sample in ${SAMPLES}
     do
-	# Read the trimmed forward and reverse reads
-    echo "Aligning reads with STAR on sample: ${sample}"
+	    # Read the trimmed forward and reverse reads
+        echo "Aligning reads with STAR on sample: ${sample}"
 	
-	fw_read=${INPUT_DIR}${sample}_R1_001_val_1.fq
-	rv_read=${INPUT_DIR}${sample}_R2_001_val_2.fq
+	    fw_read=${INPUT_DIR}${sample}_R1_001_val_1.fq
+	    rv_read=${INPUT_DIR}${sample}_R2_001_val_2.fq
 
         # Align reads with STAR
         $STAR_EXE --runThreadN ${CORES}\

@@ -36,19 +36,6 @@ then
         done <<< "$samples"
     fi
 
-    # Sample the reads using seqtk reading in the samples.tsv file
-    while read -r line
-    do
-        # Extract the sample name, forward read and reverse read
-        sample=$(echo $line | cut -d ',' -f1)
-        fw_read=$(echo $line | cut -d ',' -f2)
-        rv_read=$(echo $line | cut -d ',' -f3)
-
-        echo "Subsampling reads for sample: $sample"
-        seqtk sample -s100 $fw_read 10000 > "${output_dir}/$(basename ${fw_read})"
-        seqtk sample -s100 $rv_read 10000 > "${output_dir}/$(basename ${rv_read})"
-    done < <(tail -n +2 "${config_file}")
-
 else
     echo "Input directory does not exist"
 fi
