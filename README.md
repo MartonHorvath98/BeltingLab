@@ -71,7 +71,6 @@ By comparing mRNA expression levels across both 2D and 3D cell culture systems u
 │   └── samples.csv
 ├── grch38
 │   ├── hisat
-│   ├── salmon_index
 │   └── star_index
 ├── RStudio
 │   ├── rnaseq
@@ -179,7 +178,7 @@ done < <(tail -n +2 "${config_dir}/samples.csv") # skip the header
 ```
 
 # 2. Bioinformatical pipeline 
-$${\color{gray}-\ Compare\ gene\ expression\ RNA-seq\ from\ cell\ lines\ (2D)\ and\ organoids\ (3D)\ grown\ under\ normoxia\ and\ hypoxia\ -}$$
+*Compare gene expression RNA-seq from cell lines (2D) and organoids (3D) grown under normoxia and hypoxia*
 
 ## 2.1. Quality Control
 This step involves the pre-processing of the data to remove:

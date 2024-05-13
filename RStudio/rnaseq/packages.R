@@ -29,10 +29,22 @@ if (!require("tibble")) install.packages("tibble")
 suppressPackageStartupMessages(library(tibble))
 # provides a 'tbl_df' class that offers better formatting than the default data 
 # frame
+if (!require("plyr")) install.packages("plyr")
+suppressPackageStartupMessages(library(plyr))
+# provides a set of tools for splitting, applying, and combining data
 if (!require("stringr")) install.packages("stringr")
 suppressPackageStartupMessages(library(stringr))
 # provides a consistent, simple and easy to use set of wrappers around the
-# 'stringi' package 
+# 'stringi' package
+if (!require("forcats")) install.packages("forcats")
+suppressPackageStartupMessages(library(forcats))
+# provides a set of tools for working with factors
+if (!require("numbers")) install.packages("numbers")
+suppressPackageStartupMessages(library(numbers))
+# provides a set of functions to format numbers
+
+# 3.) Differential expression ##################################################
+
 if (!require("DESeq2")) install.packages("DESeq2")
 suppressPackageStartupMessages(library(DESeq2))
 # provides methods to test for differential expression in count data
@@ -43,9 +55,80 @@ suppressPackageStartupMessages(library(fdrtool))
 if (!require("edgeR")) install.packages("edgeR")
 suppressPackageStartupMessages(library(edgeR))
 # provides methods to test for differential expression in count data
+if (!require("limma")) install.packages("limma")
+suppressPackageStartupMessages(library(limma))
+# provides methods to test for differential expression in microarray data
+if (!require("lme4")) install.packages("lme4")
+suppressPackageStartupMessages(library(lme4))
+# provides methods to fit linear mixed-effects models
+if (!require("lmerTest")) install.packages("lmerTest")
+suppressPackageStartupMessages(library(lmerTest))
+# provides methods to test the significance of fixed effects in linear mixed-
+# effects models
+if (!require("glmmSeq")) install.packages("glmmSeq")
+suppressPackageStartupMessages(library(glmmSeq))
+# provides methods to test for differential expression in RNA-seq data using
+# generalized linear mixed models
+
+# 4.) Gene ontology enrichment ################################################
+if (!require("clusterProfiler")) install.packages("clusterProfiler")
+suppressPackageStartupMessages(library(clusterProfiler))
+# provides a set of functions to perform gene set enrichment analysis
+if (!require("org.Hs.eg.db")) install.packages("org.Hs.eg.db")
+suppressPackageStartupMessages(library(org.Hs.eg.db))
+# provides a set of functions to map between gene identifiers and gene symbols
+if (!require("GO.db")) install.packages("GO.db")
+suppressPackageStartupMessages(library(GO.db))
+# provides a set of functions to map between gene identifiers and gene ontology
+# terms
+if (!require("topGO")) install.packages("topGO")
+suppressPackageStartupMessages(library(topGO))
+# provides a set of functions to perform gene ontology enrichment analysis
+if (!require("rrvgo")) install.packages("rrvgo")
+suppressPackageStartupMessages(library(rrvgo))
+# provides a set of functions to perform gene ontology enrichment analysis
+if (!require("GOSim")) install.packages("GOSim")
+suppressPackageStartupMessages(library(GOSim))
+# provides a set of functions to calculate semantic similarity between gene
+# ontology terms
+if (!require("GOSemSim")) install.packages("GOSemSim")
+suppressPackageStartupMessages(library(GOSemSim))
+# provides a set of functions to calculate semantic similarity between gene
+# ontology terms
+
+# 5.) Data visualization ######################################################
+
 if (!require("ggplot2")) install.packages("ggplot2")
 suppressPackageStartupMessages(library(ggplot2))
 # provides a set of functions to create plots
 if (!require("ggbiplot")) install.packages("ggbiplot")
 suppressPackageStartupMessages(library(ggbiplot))
 # provides a set of functions to create biplots
+if (!require("pheatmap")) install.packages("pheatmap")
+suppressPackageStartupMessages(library(pheatmap))
+# provides a set of functions to create heatmaps
+if (!require("RColorBrewer")) install.packages("RColorBrewer")
+suppressPackageStartupMessages(library(RColorBrewer))
+# provides a set of functions to create color palettes
+if (!require("ggpubr")) install.packages("ggpubr")
+suppressPackageStartupMessages(library(ggpubr))
+# provides a set of functions to create publication-ready plots
+if (!require("ggrepel")) install.packages("ggrepel")
+suppressPackageStartupMessages(library(ggrepel))
+# provides a set of functions to create plots with text labels
+if (!require("GOplot")) install.packages("GOplot")
+suppressPackageStartupMessages(library(GOplot))
+# provides a set of functions to create gene ontology plots
+if (!require("VennDiagram")) install.packages("VennDiagram")
+suppressPackageStartupMessages(library(VennDiagram))
+# provides a set of functions to create Venn diagrams
+if (!require("ComplexUpset")) install.packages("ComplexUpset", 
+                                               repos = BiocManager::repositories(),
+                                               type = "source")
+suppressPackageStartupMessages(library(ComplexUpset))
+# provides a set of functions to create complex UpSet plots
+if (!require("ComplexHeatmap")) install.packages("ComplexHeatmap", 
+                                                 repos = BiocManager::repositories(),
+                                                 type = "source")
+suppressPackageStartupMessages(library(ComplexHeatmap))
+# provides a set of functions to create complex heatmaps
