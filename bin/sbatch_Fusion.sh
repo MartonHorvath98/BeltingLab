@@ -13,7 +13,7 @@ module load bioinfo-tools star-fusion/1.10.1
 
 # ------------ Export paths -------------------- #
 export WHARF=/proj/sens2020018/nobackup/wharf/hmarton/hmarton-sens2020018/
-export CTAT=/sw/data/CTAT_RESOURCE_LIB/2021-03/GRCh38_gencode_v37_CTAT_lib_Mar012021.plug-n-play
+export CTAT=/sw/data/CTAT_RESOURCE_LIB/2021-03/GRCh38_gencode_v37_CTAT_lib_Mar012021.plug-n-play/ctat_genome_lib_build_dir/
 # ------------ Set global variables ------------ #
 SAMPLES="$(cat config/samples.csv | cut -d ',' -f1 | sed 's/Sample_//g')"
 CORES="16"
@@ -60,17 +60,20 @@ if [ -d "$INPUT_DIR" ]
 then
     for sample in ${SAMPLES}
     do
-	# Read the trimmed forward and reverse reads
+        # Read the trimmed forward and reverse reads
         echo "Detecting gene fusions on sample: ${sample}"
-	JUNCTIONS="${INPUT_DIR}${sample}-Sj.out.tab"
-	
-	OUTPUT_DIR="${FUSION_DIR}${sample}/"
-	mkdir -p "${OUTPUT_DIR}"
-	$FUSION_EXE \
-	    --genome-lib-dir "${CTAT}" \
-	    -J "${junction_file}" \
-	    --CPU "${CORES}" \
-	    --output-dir "${OUTPUT_DIR}"        
+        JUNCTIONS="${INPUT_DIR}${sample}-Sj.out.tab"
+        
+        OUTPUT_DIR="${FUSION_DIR}${sample}/"
+        mkdir -p "${OUTPUT_DIR}"
+        $FUSION_EXE \
+            --genome-lib-dir "${CTAT}" \
+            -J "${junction_file}" \
+            --CPU "${CORES}" \
+            --FusionInspector validate \
+            --denovo_reconstruct \
+            --examine_coding_effect \
+            --output-dir "${OUTPUT_DIR}"        
     done
 fi
        

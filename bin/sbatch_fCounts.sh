@@ -67,7 +67,7 @@ then
         echo "Quantifying reads with featureCounts on sample: ${sample}"
         bam=${INPUT_DIR}${sample}.sorted.bam
 
-	$COUNTS_EXE -p --countReadPairs -s 2 -T ${CORES} -a "${REF}/Homo_sapiens.GRCh38.gtf" -o "${COUNT_DIR}${sample}.counts.txt" "${bam}"
+	    $COUNTS_EXE -p --countReadPairs -s 2 -T ${CORES} -a "${REF}/Homo_sapiens.GRCh38.gtf" -o "${COUNT_DIR}${sample}.counts.txt" "${bam}"
     done
 fi
        

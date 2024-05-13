@@ -66,16 +66,6 @@ if [ ! -x "$GFFREAD_EXE" ] ; then
 		GFFREAD_EXE=`which gffread`
 	fi
 fi
-## 4. Salmon
-SALMON_EXE=./salmon
-if [ ! -x "$SALMON_EXE" ] ; then
-	if ! which salmon ; then
-		echo "Could not find salmon in current directory or in PATH"
-		exit 1
-	else
-		SALMON_EXE=`which salmon`
-	fi
-fi
 ## 5. Gff2bed
 BED_EXE=./gff2bed
 if [ ! -x "$BED_EXE" ] ; then
@@ -174,27 +164,7 @@ else
 fi
 
 echo "##########################################################"
-echo "# 5. Build Salmon index                                  #"
-echo "##########################################################"
-# Create decoys.txt file
-SALMON_DIR=${dir}/salmon_index && mkdir -p ${SALMON_DIR}
-grep "^>" ${GENOME} | cut -d " " -f 1 > decoys.txt
-sed -i.bak -e 's/>//g' decoys.txt
-# Concatenate transcriptome and genome
-cat ${TRANSCRIPTOME} ${GENOME} > gentrome.fa
-# Build Salmon index
-SALMON_INDEX="${SALMON_EXE} index -t gentrome.fa -d decoys.txt -i ${SALMON_DIR} -k 13 -p ${threads}"
-echo Running $SALMON_INDEX
-if $SALMON_INDEX ; then
-	# Remove concatenated transcriptome and genome
-	rm -f decoys.txt.bak gentrome.fa
-	echo "Salmon index built"
-else
-	echo "Index building failed; see error message"
-fi
-
-echo "##########################################################"
-echo "# 6. Build STAR index                                    #"
+echo "# 5. Build STAR index                                    #"
 echo "##########################################################"
 # Create STAR index directory
 STAR_DIR=${dir}/star_index && mkdir -p ${STAR_DIR}

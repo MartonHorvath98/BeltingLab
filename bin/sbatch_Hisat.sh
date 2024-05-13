@@ -101,7 +101,4 @@ do
     # Remove the unsorted bam file
     rm "${HISAT_DIR}${sample}.bam"
 
-    # Calculate readcounts with featureCounts
-    #$COUNTS_EXE -p --countReadPairs -s 2 -T ${CORES} -a "${REF}/Homo_sapiens.GRCh38.gtf"\
-    #-o "${COUNT_DIR}${sample}.counts.txt" "${HISAT_DIR}${sample}.sorted.bam"
 done
