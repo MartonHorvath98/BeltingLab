@@ -1,6 +1,6 @@
 # 1. Integrative mRNA and Proteomic Analysis of Glioblastoma cell-surface antigens
 
-$${\color{gray}Project\ works\ done\ for\ Mattias\ Belting's\ laboratory\ at\ Lund\ University}$$
+*Project works done for Mattias Belting's laboratory at Lund University*
 
 - [1. Integrative mRNA and Proteomic Analysis of Glioblastoma cell-surface antigens](#1-integrative-mrna-and-proteomic-analysis-of-glioblastoma-cell-surface-antigens)
   - [1.1. Introduction](#11-introduction)
@@ -10,14 +10,13 @@ $${\color{gray}Project\ works\ done\ for\ Mattias\ Belting's\ laboratory\ at\ Lu
   - [1.4. Setting Up the Environment](#14-setting-up-the-environment)
     - [1.4.1. Directory tree](#141-directory-tree)
     - [1.4.2. Environment prerequisits](#142-environment-prerequisits)
-  - [1.5. Raw data files](#15-raw-data-files)
+  - [1.4.3 Raw data files](#143-raw-data-files)
 - [2. Bioinformatical pipeline](#2-bioinformatical-pipeline)
   - [2.1. Quality Control](#21-quality-control)
   - [2.2. Prepare reference genome](#22-prepare-reference-genome)
   - [2.3. Read mapping](#23-read-mapping)
-    - [2.3.1 Salmon](#231-salmon)
+    - [2.3.1 HISAT2](#231-hisat2)
     - [2.3.2 STAR](#232-star)
-    - [2.3.3 HISAT2](#233-hisat2)
   - [2.4. Create report](#24-create-report)
 
 ## 1.1. Introduction
@@ -57,77 +56,58 @@ By comparing mRNA expression levels across both 2D and 3D cell culture systems u
 ### 1.4.1. Directory tree
 ```bash
 .
-├── README.md
-├── bin
-│   ├── QC.sh
-│   ├── alignHisat.sh
-│   ├── alignSTAR.sh
-│   ├── createReport.sh
-│   ├── getSamples.sh
-│   ├── makeGrch38.sh
-│   └── trimReads.sh
-├── config
-│   ├── environment.yml
-│   └── samples.csv
-├── grch38
-│   ├── hisat
-│   └── star_index
 ├── RStudio
 │   ├── rnaseq
 │   └── stats
+├── bin
+├── config
 ├── data
 │   ├── 00_raw
-│   ├── 01_sample
-│   └── ...
-├── results
-│   ├── 01_QC
-│   ├── 02_trim
-│   └── ...
-└── workflow.sh
+│   └── 01_sample
+├── grch38
+│   ├── hisat
+│   ├── salmon_index
+│   └── star_index
+└── results
+    ├── 01_QC
+    ├── 02_trim
+    ├── 03_hisat
+    ├── 04_counts
+    ├── 05_star
+    └── 06_fusion
 ```
 ### 1.4.2. Environment prerequisits
 
-Download and install mamba through the recommended miniforge [installation](https://github.com/conda-forge/miniforge) process.
+The sensitive nature of the patient tumor data makes it a requirement to work on the protected high-performance computing cluster of Uppmax (Uppsala Multidisciplinary Center for Advanced Computational Science), [BIANCA](https://www.uppmax.uu.se/resources/systems/the-bianca-cluster/). BIANCA is specifically designed for sensitive data providing a secure environment. It operates under strict access control, including two-factor authorization, connection only from a SUNET Internet Protocol ('IP') address, no direct web access, rather using an sftp port for up- and downloading data. These features ensure compliance with data protection regulations while handling and processing data that is subject to legal and ethical restrictions, e.g. the patient total RNA-seq and genome sequence date used in our research.
+
+In order to access Bianca, an account is needed both for the Swedish User and Project Repository (SUPR) with the university portal (SWAMID) and for Uppmax. The user needs to join a SENS project and set up a two-factor authentication via their Uppmax account.
+
+UPPMAX is a shared resource, and it uses a sceduling system - called SLURM - to ensure fair allocation. SLURM can be accessed either by submitting and running a batch job script via the `sbatch` command or by starting an interactive session with `interactive -A [project-code]`. The sbatch script must include Slurm directives and the commands necessary to execute the job: 
+- **mandatory settings**: 
+  - *account (-A)*: you must be a member to charge a project 
+- **important settings**:  
+  - *partition (-p)*: should the project run of complete nodes or only parts of them, on cores (default!) (1 node = 16 core(s)). The core hours scale with the number of course, which is important to keep in mind not to overshoot the 5000 core-hours allocated to a project each month.
+  - *number of cores/nodes (-n)*
+  - *time (-t)*: estimated runtime in core hours (hh:mm:ss). Always overestimate with ~50%, because jobs get killed when they reach the time limit, but users only get charged for the actual runtime. 
+
+An example header:
 ```bash
-wget https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh
-bash Miniforge3-Linux-x86_64.sh
+#!/bin/bash -l
+#SBATCH –A sens1234123 
+#SBATCH –J test_job 
+#SBATCH –p core 
+#SBATCH –n 1 
+#SBATCH –t 00:10:00 
+ 
+module load some_software 
+srun myapplication 
 ```
-Then, use mamba to set up the virtual environment, to run the scripts.
-```bash
-# Create environment
-mamba env create -f config/environment.yml
+[!IMPORTANT]
+>***When logging in, all users join the login node first. It is IMPORTANT, although not compulsory on BIANCA, to move onto a computing node (using either an interactive session or an sbatch script) to perform calculations. However, memory intensive processes will be down prioritized to not block access for others (and might never be finished).***
 
-#Set up directory tree
-mamba activate glioblastoma
-```
-While the environment - called 'glioblastoma' - is created, based on the `environment.yml` file, the following programs are installed:
-```bash
-# packages in environment at /root/miniforge3/envs/glioblastoma:
-#
-# Name                    Version                   Build  Channel
-bedops                    2.4.41               h4ac6f70_2    bioconda
-cutadapt                  4.7             py310h4b81fae_1    bioconda
-fastqc                    0.12.1               hdfd78af_0    bioconda
-gffread                   0.12.7               hdcf5f25_4    bioconda
-hisat2                    2.2.1                hdbdd923_6    bioconda
-multiqc                   1.21               pyhdfd78af_0    bioconda
-picard                    3.1.1                hdfd78af_0    bioconda
-pip                       24.0               pyhd8ed1ab_0    conda-forge
-python                    3.10.14         hd12c33a_0_cpython    conda-forge
-salmon                    1.10.1               hecfa306_2    bioconda
-samtools                  1.6                 hc3601fc_10    bioconda
-seqtk                     1.4                  he4a0461_2    bioconda
-star                      2.7.10b              h9ee0642_0    bioconda
-subread                   2.0.6                he4a0461_0    bioconda
-trim-galore               0.6.10               hdfd78af_0    bioconda
-```
+## 1.4.3 Raw data files
 
-## 1.5. Raw data files
-
-The sensitive nature of the patient tumor data makes it a requirement to work on the protected high-performance computing cluster of Uppmax, [BIANCA](https://www.uppmax.uu.se/resources/systems/the-bianca-cluster/). In order to access Bianca, an account is needed both for the Swedish User and Project Repository (SUPR) with the university portal (SWAMID) and for Uppmax. The user needs to join a SENS project and set up a two-factor authentication via their Uppmax account.
-
-For security reasons, there is no internet access on Bianca, which makes file transfer to the server a little complicated. In order to transfer files from Bianca the user has to go through the following way. All files must be transfered through the wharf area of Bianca, that has access
-only to one project folder, named `<username>-<projid>` but nothing outside of it. The data transfer is executed using standard sftp protocol:
+For security reasons, the hundreds of virtual project clusters on BIANCA are isolated from each other and the Internet. This makes file transfer to the server a little complicated: all files must be transfered through the wharf area of Bianca, that has access only to one project folder, named `<username>-<projid>` but nothing outside of it. The data transfer is executed using standard sftp protocol:
 ```bash
 $ sftp -q <username>-<projid>@bianca-sftp.uppmax.uu.se:<username>-<projid>
 ```
@@ -136,9 +116,9 @@ The window will change to an SFTP environment, where bulk upload can be executed
 sftp> mput -r <path/…/local_dir/> <path/…/remote_dir>
 ```
 >[!IMPORTANT]
->To avoid subtle error with the transfers, make sure you have write permissions for "owner" on the source files and directories. Furthermore, `sfpt put` cannot create directories, only use pre-existing one, so make sure that directories with matching names to the ones you want to copy are created in the remote folder prior to the transfer! 
+>***To avoid subtle error with the transfers, make sure you have write permissions for "owner" on the source files and directories. Furthermore, `sfpt put` cannot create directories, only use pre-existing one, so make sure that directories with matching names to the ones you want to copy are created in the remote folder prior to the transfer!*** 
 
-The raw files take up 291Gb of space, hence for some tasks (*e.g. figuring library preparation method with salmon*) a subset of 10 thousand transcripts was subsampled from each using **seqtk (v1.4)** and the bash script `getSamples.sh`. A seed was set to make sure the same read-pairs are retained for each sample. At the same time, the names of the samples as well as the paths to the forward and reverse reads were collected in the "config/samples.csv" file to ease further analysis steps.
+The names of the samples as well as the paths to the forward and reverse reads were collected in the "config/samples.csv" file to ease further analysis steps and allow looping using the `getSamples.sh` script.
 
 ```bash
 # Create the samples.tsv file if it does not exist
@@ -161,20 +141,6 @@ then
         echo -e "$name,$fw_read,$rv_read" >> "${config_dir}/samples.csv"
     done <<< "$samples"
 fi
-
-# Pseudo-randomly subsample the reads using seqtk reading in the samples.csv file
-while read -r line
-do
-    # Extract the sample name, forward read and reverse read
-    sample=$(echo $line | cut -d ',' -f1)
-    fw_read=$(echo $line | cut -d ',' -f2)
-    rv_read=$(echo $line | cut -d ',' -f3)
-
-    # subsample 10.000 reads - new files take up 3.3Mb each
-    echo "Subsampling reads for sample: $sample"
-    seqtk sample -s100 $fw_read 10000 > "${output_dir}/$(basename ${fw_read})"
-    seqtk sample -s100 $rv_read 10000 > "${output_dir}/$(basename ${rv_read})"
-done < <(tail -n +2 "${config_dir}/samples.csv") # skip the header
 ```
 
 # 2. Bioinformatical pipeline 
@@ -187,7 +153,7 @@ This step involves the pre-processing of the data to remove:
 - low-quality reads
 - uncalled bases
 
-In this step, quality assessment is performed using the TrimGalore suite, which is a wrapper script around the popular tools FastQC and the adapter trimming algorithm Cutadapt. Cutadapt is a semi-global aligner algorithm (also called free-shift), which means that the sequences are allowed to freely shift relative to each other and differences are only penalised in the overlapping region between them. The algorithm works using unit costs (alignment score) to find the optimal overlap alignments, where positive value is assigned to matching bases and penalties are given for mismatches, inserts or deletions.
+In this step, quality assessment is performed using the TrimGalore suite (v0.6.1), which is a wrapper script around the popular tools FastQC and the adapter trimming algorithm Cutadapt. Cutadapt is a semi-global aligner algorithm (also called free-shift), which means that the sequences are allowed to freely shift relative to each other and differences are only penalised in the overlapping region between them. The algorithm works using unit costs (alignment score) to find the optimal overlap alignments, where positive value is assigned to matching bases and penalties are given for mismatches, inserts or deletions.
 
 >[!IMPORTANT]
 > ***It is important to check that sequence quality is similar for all samples and discard outliers. As a general rule, read quality decreases towards the 3’ end of reads, and if it becomes too low, bases should be removed to improve mappability.  The quality and/or adapter trimming may result in very short sequences (sometimes as short as 0 bp), and since alignment programs may require sequences with a certain minimum length to avoid crashes to short fragments (in the case above, below 36 bases: --length 36) should not be considered either.***
@@ -204,10 +170,10 @@ Following a prelimnary quality assessment with FastQC, we can say that the overa
 ```bash
 # Loop through the files in the input directory
 echo "Trimming adapters with Trim Galore on sample: ${sample}"
-fw_read=$(ls ${input_dir}/${sample}_R1_001.fastq) # find forward read pair
-rv_read=$(ls ${input_dir}/${sample}_R2_001.fastq) # find reverse read pair
-        
-trim_galore ${fw_read} ${rv_read} -j 4 -q 20 --length 36 --paired --illumina -o ${output_dir} 
+fw_read=${RAW_DATA}Sample_${sample}/${sample}_R1_001.fastq.gz
+rv_read=${RAW_DATA}Sample_${sample}/${sample}_R2_001.fastq.gz
+    
+trim_galore ${fw_read} ${rv_read} -j 4 -q 20 --length 36 --paired --illumina --output_dir ${TRIM_DIR} --fastqc_args "--outdir ${TRIM_DIR}"
 ```
 The arguments mean:
 - `-j/--cores [INT]` – defines the number of  of cores to be used for trimming *[default: 1]*,
@@ -230,12 +196,9 @@ Once the pre-processing and quality control steps are completed the resulting, h
 >[!IMPORTANT]
 >***It is crucial to download the same reference in .fasta and .gff format from the same origin, to avoid conflicts in later steps of the analysis pipeline. Here, the GRCh38 release version v.108 (2022 Oct) of H. sapiens (human) from Ensembl is used as reference.***
 
-There are many bioinformatics tools available to perform the alignment of short reads. Here, the ones used are **Hisat2 (v.2.2.1)** (*“hierarchical indexing for spliced alignment of transcripts 2”*) and **STAR (v.2.7.10b)** (*Spliced Transcripts Alignment to a Reference*). Both Hisat2 and STAR provide sensitive and highliy efficient alignment for non-contiguous transcripts (splice-sensitive), which makes them ideal for aligning RNA-samples. In the later part of the analysis, results from the Hisat2 alignment will be used for differential expression analysis and STAR will be particularly useful for the detection of splice junctions and different isoforms.
+There are many bioinformatics tools available to perform the alignment of short reads. Here, the ones used are **Hisat2 (v.2.2.1)** (*“hierarchical indexing for spliced alignment of transcripts 2”*) and **STAR (v.2.7.11a)** (*Spliced Transcripts Alignment to a Reference*). Both Hisat2 and STAR provide sensitive and highliy efficient alignment for non-contiguous transcripts (splice-sensitive), which makes them ideal for aligning RNA-samples. In the later part of the analysis, results from the Hisat2 alignment will be used for differential expression analysis and STAR will be particularly useful for the detection of splice junctions and different isoforms.
 
->[!NOTE]
->*Besides Hisat2, reads will also be aligned with a dry run using the quasi-mapper, Salmon. The technique employed by Salmon can determine library preparation method.*
-
-Indexes for the Hisat2, STAR and Salmon aligners are created using the `makeGrch38.sh` script. The hisat2-build command will create eight files with the extensions *.1.ht2, .2.ht2, .3.ht2, .4.ht2, .5.ht2, .6.ht2, .7.ht2* and *.8.ht2*. These files together are the index for hisat2. Because the plans include heavy focus on alternative splicing and gene fusion events, the genome index is created with transcript annotations using the `--ss` and `--exon` flags. These take into account the prepared exons and splice sites, in HISAT2's own format (three or four tab-separated columns). The STAR index of the reference genome compirses of the binary genome sequence, suffix arrays, junction coordinates, and transcript/gene information. The suffix array method used for the construction enables rapid and memory-efficient searches, **BUT!** the file system needs to have at least 100 Gb of disk space available for the human genome (*final size ~ 30Gb*). The genome indeces for Hisat2 and STAR are generated with the following steps:
+Indexes for the Hisat2 and STAR aligners are created using the `makeGrch38.sh` script. The hisat2-build command will create eight files with the extensions *.1.ht2, .2.ht2, .3.ht2, .4.ht2, .5.ht2, .6.ht2, .7.ht2* and *.8.ht2*. These files together are the index for hisat2. Because the plans include heavy focus on alternative splicing and gene fusion events, the genome index is created with transcript annotations using the `--ss` and `--exon` flags. These take into account the prepared exons and splice sites, in HISAT2's own format (three or four tab-separated columns). The STAR index of the reference genome compirses of the binary genome sequence, suffix arrays, junction coordinates, and transcript/gene information. The suffix array method used for the construction enables rapid and memory-efficient searches, **BUT!** the file system needs to have at least 100 Gb of disk space available for the human genome (*final size ~ 30Gb*). The genome indeces for Hisat2 and STAR are generated with the following steps:
 ```bash
 # ------- Download reference from ENSEMBL -------
 # The Ensembl release version and base URLs for downloads
@@ -255,87 +218,38 @@ hisat-build -p ${threads} --seed 100 <path/…/ref.fasta> --ss <path/…/splices
 
 # ------- Create STAR index -------
 # Building STAR index
-star --runThreadN ${threads} --runMode genomeGenerate --genomeDir <path/…/STAR_index/> --genomeFastaFiles <path/…/ref.fasta>  --sjdbGTFfile <path/…/ref.gtf> --sjdbOverhang 100
+star --runThreadN ${threads} --runMode genomeGenerate --genomeDir <path/…/STAR_index/> --genomeFastaFiles <path/…/ref.fa>  --sjdbGTFfile <path/…/ref.gtf> --sjdbOverhang 100
 ```
-
-To get accurate estimates with Salmon we build the index using a recommended, decoy-aware transcriptome file, including the entire genome of the organism (Grch38) as the decoy sequence. This is achieved by concatenating the genome to the end of the transcriptome before indexing. Salmon indexing also requires populating the decoys.txt file with the chromosome names, which is extractable by using the `grep` command. This scheme provides a more comprehensive set of decoys, but, obviously, requires considerably more memory to build the index. This will build the mapping-based index, using an auxiliary k-mer hash, that will also act as the minimum acceptable length for a valid match. We can run salmon indexing step, with the same ensemble reference files, as follows:
-```bash
-# ------- Create Salmon index -------
-# Create decoys.txt file
-grep "^>" ${ENSEMBL_GENOME} | cut -d " " -f 1 | sed -e 's/>//g' > <path/…/decoys.txt>
-# Concatenate transcriptome and genome
-cat ${ENSEMBL_TRANSCRIPTOME} ${ENSEMBL_GENOME} > <path/…/gentrome.fa>
-# Build Salmon index
-salmon index -t gentrome.fa -d decoys.txt -i <path/…/SALMON/> -k 13 -p ${threads}
-```
-
->[!NOTE]
->*Running an exploratory mapping step, we found low alignment rate (= appx. 40%), thus a smaller value of `-k 13` is set to improve sensitivity even more using selective alignment (default: k-mers of length 31).*
-
->[!IMPORTANT] 
->***The genome targets (decoys) should come after the transcriptome targets in the reference!***
 
 ## 2.3. Read mapping
 
 >[!NOTE]
 >*Besides the mapper algorithms, Samtools is used for processing and analysing the data. It includes tools for file format conversion and manipulation, sorting, querying, and statistics amongst other methods.*
 
-### 2.3.1 Salmon
+### 2.3.1 HISAT2
 
-> [!IMPORTANT]
-> ***The most important parameter to execute an optimal alignment is the strandedness of the library.*** 
-
-Using **Salmon (v1.10.1)** we predict the library preparation method setting automatic library preparation tag `--libType "A"`. Executing an exploratory run with Salmon without performing the actual quantification of transcripts can be achieved by using the `--skipQuant` flag. During the exploratory analysis the set parameters are:
-- `--libType 'A'` – sets the library type automatic,
-- `-i [PATH]` –  the path to the reference genome index,
-- `-1` and `-2` –  mate 1s and mate 2s reads,
-- `-p [INT]` – specifies the number of threads to be used,
-- `--skipQuant` – stops the execution before the actual quantification algorithm is run,
-- `-o` – the path where the file, called *lib_format_counts.json*, with the number of mappings matching each possible library type and the strand-bias will be recorded. 
-
+We align the RNA-seq reads to a genome in order to identify exon-exon splice junctions with the help of the `sbatch_Hisat.sh` script. 
 ```bash
-# Define library type with Salmon
-salmon quant -l 'A' -i ${reference} -1 ${fw_read} -2 ${rv_read} -p ${threads} --skipQuant -o ${output_dir}/${sample}
+# Read the trimmed forward and reverse reads
+    echo "Aligning reads with Hisat2 on sample: ${sample}"
+    fw_read=${INPUT_DATA}${sample}_R1_001_val_1.fq.gz
+    rv_read=${INPUT_DATA}${sample}_R2_001_val_2.fq.gz
+        
+    # Align reads with Hisat2
+    mkdir -p "${HISAT_DIR}${sample}"
+    $HISAT2_EXE --phred33 --dta --non-deterministic -p ${CORES} --novel-splicesite-outfile "${HISAT_DIR}${sample}/novel_splicesite.txt" --summary-file "${HISAT_DIR}${sample}/stats.txt" --new-summary -x "${REF}/hisat/grch38_index" -1 ${fw_read} -2 ${rv_read} |\
+    $SAMTOOLS_EXE view -h -bS > "${HISAT_DIR}${sample}.bam"
+
+    # Sort the bam file
+    $SAMTOOLS_EXE sort -@ ${CORES} -o "${HISAT_DIR}${sample}.sorted.bam" "${HISAT_DIR}${sample}.bam"
+
+    # Index the sorted bam file
+    $SAMTOOLS_EXE index "${HISAT_DIR}${sample}.sorted.bam"
+
+    # Remove the unsorted bam file
+    rm "${HISAT_DIR}${sample}.bam"
 ```
-
-**Results:** *The exploratory run on the subsampled reads told us that the library is unstranded (*"IU"*). However there is a very high mapping bias as in the case of more than 99% of the individual alignments the first read maps to the reverse strand (*"ISR"*). Consequentially, during the Hisat2 alignment, we can consider the library to be reversely stranded, that we can specify using the option `--rna-strandedness "RF"`.*
-
->[!NOTE]
->*This corresponds to the second-strand synthesis method common for many Illumina kits, where R1 maps to the reverse strand of the DNA.*
-
-### 2.3.2 STAR
-
-We align the RNA-seq reads to a genome with STAR in order to identify abnormal splicing events and chimeras (fusion genes) with the help of the `alignSTAR.sh` script. Following alignment we will estimate gene counts with an alignment-based Salmon quantification, that uses inference method assuming that alignments are random, not sorted by target or position. STAR can output alignment file directly in binary BAM format using the tag `--outSAMtype`. During the alignment step the applied parameters mean:
-- `--runThreadN [INT]` – number of cores,
-- `--genomeDir` – path to the reference STAR index,
-- `--readFilesIn [R1] [R2]` – mate 1s and mate 2s reads,
-- `--outSAMtype 'BAM Unsorted'` – makes sure that the output is in unsorted BAM format,
-- `--outFileNamePrefix` – prefix to indetify unique outputs
-- `--chimSegmentMin [INT]` – detect fusions that map to two chromosomes, with a minimum length above [INT] on either chromosome
-- `--chimOutType 'WithinBAM'` – chimeric alignments will be included together with normal alignments
-
-Later, we can quantify the reads directly in alignment-based mode against the prepared index using the `salmon quant` command. In alignment-based mode automatic library type detection will not work, we must provide the previously detected library type explicitly. We enable sequence-specific bias modeling with `--seqBias`, that results in 4 extra files in the auxiliary directory named *obs5_seq.gz, obs3_seq.gz, exp5_seq.gz, exp5_seq.gz*. These encode the parameters of the VLMM that were learned for the 5’ and 3’ fragment ends. Each file is a gzipped, binary file with the same format. During the Salmon quantification step the set parameters are:
-- `-l 'ISR'` – sets the library type - here: ***inward orientation ('I'), stranded ('S'), reverse-first ('R') protocol***,
-- `-t [PATH]` –  the path to the reference genome sequence FASTA file,
-- `-g [PATH]` –  the path to the reference genome anootation GTF file,
-- `-1` and `-2` –  mate 1s and mate 2s reads,
-- `-p [INT]` – specifies the number of threads to be used,
-- `-o` – is the path to the output folder where the quantification file (called quant.sf), the command information file (called cmd_info.json) and a file (called lib_format_counts.json) with the number of fragments that had at least one mapping compatible with the designated library format are saved.
-
-```bash
-# ------- Alignment -------
-# Align reads with STAR
-STAR --runThreadN ${threads} --genomeDir <path/…/star_index/> --readFilesIn ${fw_read} ${rv_read} --outSAMtype BAM Unsorted \
---outFileNamePrefix "${star_output}/${sample}-" --chimSegmentMin 20 --chimOutType WithinBAM
-
-# ------- Quantification -------
-# Quantify with Salmon
-salmon quant -l 'ISR' -t <path/…/genome.fa> -g <path/…/genome.gtf> -a ${alignment} -p ${threads} --seqBias -o <path/…/output/>
-```
-
-### 2.3.3 HISAT2
-
-We align the RNA-seq reads to a genome in order to identify exon-exon splice junctions with the help of the `alignHisat.sh` script. The next downstream step would most likely be a genome-guided transcriptome assembly, so we use the --novel-splicesite-outfile mode to reports a list of splice sites in the file: chromosome name tab genomic position of the flanking base on the left side of an intron tab genomic position of the flanking base on the right tab strand (+, -, and .) ‘.’ indicates an unknown strand for non-canonical splice sites. During the alignment step the applied parameters mean:
+During the alignment step the applied parameters mean:
 - `--phred33` – defines the input quality (*default: Phred+33*),
 - `--dta` – (=downstream-transcriptome-assembly) report alignments tailored for transcript assemblers including StringTie,
 - `--p [INT]` – sets INT number of cores to be used during the calculations,
@@ -346,36 +260,90 @@ We align the RNA-seq reads to a genome in order to identify exon-exon splice jun
 - `--summary-file` – sets the path to the summary file,
 - `--new-summary` – makes the summary file readable by MultiQC for downstream analysis.
 
-Following the alingment step, **Samtools (v.1.19.2)**, channeled through the piping operator '|', instantly converts the .sam files produced by the aligner to their binary counterpart .bam, which limits space requirements as the output file size shrinks considerably via `samtools view -h -bS > <path/…/file.bam>`. Then using the `samtools sort` and `index` command the bam files are sorted along the reference, and BAI-format index is generated. Finally,  **featureCounts (v.2.0.6)** takes as input the BAM files and the genome annotation file in GFF format containing the chromosomal coordinates of features. It outputs numbers of reads assigned to features or meta-features. Each entry in the GFF annotation file is considered a feature (e.g. an exon), while a meta-feature is the aggregation of a set of features (e.g. a gene). When summarising reads at meta-feature level, read counts obtained for features included in the same meta-feature will be added up to yield the read count for the corresponding meta-feature. It also outputs stat info for the overall summarization results, including number of successfully assigned reads and number of reads that failed to be assigned due to various reasons (these reasons are included in the stat info). While counting how many reads align to each gene in a genome annotation the set parameters are:
+As, following quantification, the next downstream step will most likely be a genome-guided transcriptome assembly, the `--novel-splicesite-outfile` parameter is also set to reports a list of splice sites in the file: chromosome name tab genomic position of the flanking base on the left side of an intron tab genomic position of the flanking base on the right tab strand (+, -, and .) ‘.’ indicates an unknown strand for non-canonical splice sites. 
+
+Following the alingment step, **Samtools (v.1.19)**, channeled through the piping operator '|', instantly converts the .sam files produced by the aligner to their binary counterpart .bam, which limits space requirements as the output file size shrinks considerably via `samtools view -h -bS > <path/…/file.bam>`. Then using the `samtools sort` and `index` command the bam files are sorted along the reference, and BAI-format index is generated.
+
+Finally, we quantify the successfully aligned reads via **featureCounts (v.2.0.3)**, using the `sbatch_fCounts.sh` script. FeatureCounts, that is part of the subread software package, takes the resulting BAM files on its input and the genome annotation file in GFF format containing the chromosomal coordinates of features. It outputs numbers of reads assigned to features or meta-features. Each entry in the GFF annotation file is considered a feature (e.g. an exon), while a meta-feature is the aggregation of a set of features (e.g. a gene). When summarising reads at meta-feature level, read counts obtained for features included in the same meta-feature will be added up to yield the read count for the corresponding meta-feature. It also outputs stat info for the overall summarization results, including number of successfully assigned reads and number of reads that failed to be assigned due to various reasons (these reasons are included in the stat info). 
+```bash
+# Read the trimmed forward and reverse reads
+  echo "Quantifying reads with featureCounts on sample: ${sample}"
+  bam=${INPUT_DIR}${sample}.sorted.bam
+
+	$COUNTS_EXE -p --countReadPairs -s 2 -T ${CORES} -a "${REF}/Homo_sapiens.GRCh38.gtf" -o "${COUNT_DIR}${sample}.counts.txt" "${bam}"
+    
+```
+While counting how many reads align to each gene in a genome annotation the set parameters are:
 - `-p` – specifies that input data contain paired-end reads and performs fragment counting (ie. counting read pairs), the `--countReadPairs` parameter should also be specified in addition to this parameter
 - `-s [INT]` – determines the strand-specificity of the read counting (*here: 2 (reversely stranded)*),
-- `-f` – performs read counting at feature level (eg. counting reads for exons rather than genes),
-- `-O` –  assigns reads to all their overlapping features (or meta-features if -f is not specified),
-- `-M` – multi-mapping reads will also be counted,
 - `-T [INT]` – specifies the number of threads to be used,
 - `-a` – is a mandatory argument, the path to the annotation file,
 - `-o` –  is the path to and name of the output file that includes the read counts and a separate file with summary statistics.
 
+### 2.3.2 STAR
+
+We align the RNA-seq reads to a genome with STAR in order to identify abnormal splicing events and chimeras (fusion genes) with the help of the `sbatch_STAR.sh` script. Following the alignment we will use **STAR-fusion (v1.10.1)** to identify candidate fusion transcripts supported by the Illumina reads. 
 ```bash
-# ------- Alignment -------
-# Align reads with Hisat2
-hisat2 --phred33 --dta --non-deterministic -p ${cores} --novel-splicesite-outfile "${output_dir}/${sample}/novel_splicesite.txt"\
---summary-file "${output_dir}/${sample}/stats.txt" --new-summary -x ${reference}/hisat/${base_name} -1 ${fw_read} -2 ${rv_read} |\
-samtools view -h -bS > "${output_dir}/${sample}.bam"
+# Read the trimmed forward and reverse reads
+echo "Aligning reads with STAR on sample: ${sample}"
+	
+fw_read=${INPUT_DIR}${sample}_R1_001_val_1.fq.gz
+rv_read=${INPUT_DIR}${sample}_R2_001_val_2.fq.gz
 
-# ------- Sort and index bam files -------
-# Sort the bam file
-samtools sort -@ ${cores} -o "${output_dir}/${sample}.sorted.bam" "${output_dir}/${sample}.bam"
-# Index the sorted bam file
-samtools index "${output_dir}/${sample}.sorted.bam"
-# Remove the unsorted bam file
-rm "${output_dir}/${sample}.bam"
-
-# ------- Quantification -------
-# Calculate readcounts with featureCounts
-featureCounts -p --countReadPairs -s 0 -f -M -O -T ${cores} -a ${reference}/Homo_sapiens.GRCh38.gff\
--o "${output_dir}/${sample}.counts.txt" "${output_dir}/${sample}.sorted.bam"
+# Align reads with STAR
+STAR --runThreadN ${CORES} \ 
+  --genomeDir "${REF}/star_index" \ 
+  --readFilesIn ${fw_read} ${rv_read} \ 
+  --readFilesCommand "gunzip -c" \ 
+  --outReadsUnmapped None \ 
+  --outSAMtype BAM SortedByCoordinate \ 
+  --outBAMcompression 6 \ 
+  --outFileNamePrefix "${STAR_DIR}${sample}-" \ 
+  --twopassMode Basic \ 
+  --chimOutType Junctions \  # **essential** to create the Chimeric.junction.out file for STAR-Fusion
+  --chimOutJunctionFormat 1 \  # **essential** includes required metadata in Chimeric.out.junction file.
+  --chimSegmentMin 12 \  # **essential to invoke chimeric read detection & reporting**
+  --chimJunctionOverhangMin 8 \ 
+  --alignSJDBoverhangMin 10 \ 
+  --alignMatesGapMax 100000 \ 
+  --alignIntronMax 100000 \ 
+  --alignSJstitchMismatchNmax 5 -1 5 5
 ```
+During the alignment step the applied parameters mean:
+- `--runThreadN [INT]` – number of cores,
+- `--genomeDir` – path to the reference STAR index,
+- `--readFilesIn [R1] [R2]` – mate 1s and mate 2s reads,
+- `--readFilesCommand ["gunzip -c"]` – STAR cannot work with compressed input files, so we have to create temporary unzipped versions of the trimmed fastq files
+- `--outSAMtype 'BAM SortedByCoordinate'` – makes sure that the output is in sorted BAM format,
+- `--outBAMcompression [INT]` – defines the compression rate of the output files (on a 0 to 10 scale, *default:6*),
+- `--outFileNamePrefix` – prefix to indetify unique outputs,
+- `--twopassMode Basic` – enambles the most sensitive novel splice junction discovery: during the 1st pass STAR maps with the usual parameters, then in hte 2nd pass it collects the previously detected junctions and uses the mas "annotated" junctions, what allows to detect more spliced reads mapping to novel junctions, 
+- `--chimOutType Junctions` – outputs the chimeric alignments to a separate file, called *"Chimeric.out.junction"*, that is the input file for STAR-Fusion,
+- `--chimOutJunctionFormat 1` – is essential to include required metadata in Chimeric.junction.out file for STAR-Fusion,
+- `--chimSegmentMin [INT]` – detect fusions that map to two chromosomes, with a minimum length above [INT] on either chromosome, this parameter is essential to start chimeric read detection and reporting
+
+Later, we identify the chimeras that align to two chromosomes, each segment longer than the threshold set with `--chimSegmentMin`. STAR-Fusion is part of the suite of tools, [Trinity Cancer Transcriptome Analysis Toolkit (CTAT)](https://github.com/NCIP/Trinity_CTAT/wiki), focused on identifying and characterizing fusion transcripts in cancer. The Trinity CTAT ecosystem of tools requires a CTAT genome lib, which is effectively a resource package containing a target genome, reference annotations, and various meta data files that support fusion-finding. On BIANCA a pre-compiled CTAT genome lib is available that I am going to use. Predicted fusions are then 'in silico validated' using FusionInspector, which performs a more refined exploration of the candidate fusion transcripts, runs Trinity to de novo assemble fusion transcripts from the RNA-Seq reads, and provides the evidence in a suitable format to facilitate visualization. Predicted fusions are annotated according to prior knowledge of fusion transcripts relevant to cancer biology (or previously observed in normal samples and less likely to be relevant to cancer), and assessed for the impact of the predicted fusion event on coding regions, indicating whether the fusion is in-frame or frame-shifted along with combinations of domains that are expected to exist in the chimeric protein.
+
+```bash
+echo "Detecting gene fusions on sample: ${sample}"
+JUNCTIONS="${INPUT_DIR}${sample}-Chimeric.out.junction"
+        
+OUTPUT_DIR="${FUSION_DIR}${sample}/"
+mkdir -p "${OUTPUT_DIR}"
+STAR-Fusion \ 
+  --genome_lib_dir "${CTAT}" \ 
+  --chimeric_junctions "${junction_file}" \ 
+  --FusionInspector validate \ 
+  --denovo_reconstruct \ 
+  --examine_coding_effect \ 
+  --output-dir "${OUTPUT_DIR}" 
+```
+ Running parameters:
+- `--genome_lib_dir [PATH]` – path to the CTAT genome lib,
+- `-J/--chimeric_junctions [PATH]` – accession path to the 'Chimeric.out.junction' file created by STAR
+- `--FusionInspector 'validate'` – requires the candidates (in a format: geneA--geneB) from the first column of the 'Chimeric.out.junction' file, then aligns them to the genome to identify those reads that align concordantly as fusion evidence to the fusion contigs,
+- `--denovo_reconstruct` – *de novo* reconstruction of fusion transcripts using Trinity, creates a `.fasta` and a `.bed` file,
+- `--examine_coding_effect` –  explores the effect the fusion events have on coding regions of the fused genes.
 
 ## 2.4. Create report
 
