@@ -26,6 +26,7 @@ data/
 # Results
 results/
 plots/
+report/ 
 
 # Reference genome
 grch38/

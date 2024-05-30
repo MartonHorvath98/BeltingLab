@@ -9,16 +9,20 @@ merge.rec <- function(.list, ...){
 bind_df <- function(go, kegg){
   go <- lapply(go, function(x){
     x %>% 
-      dplyr::select(ONTOLOGY, ID, Description, GeneRatio, pvalue, geneID) %>%
+      dplyr::select(ONTOLOGY, ID, Description, Count, GeneRatio, pvalue, geneID) %>%
       dplyr::rename("category" = ONTOLOGY)
   })
   
   kegg <- kegg %>% 
-    dplyr::select(ID, Description,GeneRatio, pvalue, geneID) %>% 
+    dplyr::select(ID, Description, Count, GeneRatio, pvalue, geneID) %>% 
     dplyr::mutate(category = "KEGG")
-  tmp <- do.call(rbind, append(go, list("KEGG" = kegg)))
-  return(tmp)
+  df <- do.call(rbind, append(go, list("KEGG" = kegg)))
+  df <- df %>% 
+    dplyr::mutate(category = forcats::fct_relevel(category, "KEGG", after = Inf))
+    
+  return(df)
 }
+
 
 # ----------------- Differential expression analysis functions -----------------
 # Function to perform differential expression analysis using DESeq2
@@ -185,16 +189,35 @@ make_vulcanplot <- function(total, sig){
                       label = na.omit(sig)[,"geneID"])))
 }
 
+merge_vulcanplots <- function(p1, p2, p3, titles){
+  legend <- get_legend(p1 +
+                         guides(colour = guide_legend(title = "Significance: ")) + 
+                         theme(legend.position="bottom", legend.box="horizontal",
+                               legend.text = element_text(size = 12),
+                               legend.title = element_text(size = 12),
+                               legend.key = element_rect(fill = NA)))
+  
+  return(plot <- cowplot::plot_grid(
+    p1 + ggtitle(titles[1]),
+    results.593.3D_vs_2DN$plot + ggtitle(titles[2]), 
+    results.593.Tumor_vs_2DN$plot + ggtitle(titles[3]),
+    ggplot() + theme_void(),
+    legend,
+    ggplot() + theme_void(),
+    nrow = 2, ncol = 3, rel_widths = c(1,1,1), rel_heights = c(1,0.15)))
+}
+
 # ------------- Functions for overrepresentation analyses ----------------------
 # Function to extract gene lists for KEGG pathway enrichment analysis
-get_genelist <- function(list){
+get_genelist <- function(df, filter){
   # Extract the background gene list of every expressed gene
-  background <- list$df %>%
+  background <- df %>%
     dplyr::arrange(desc(log2FoldChange)) %>%
     dplyr::distinct(entrezID, .keep_all = T) %>%
     dplyr::pull("log2FoldChange", name ="entrezID")
   # Extract the gene list of interest of DEGs
-  interest <- list$sig_df %>%
+  interest <- df %>%
+    dplyr::filter(entrezID %in% filter) %>%
     dplyr::pull("log2FoldChange", name ="entrezID")
   interest <- sort(interest, decreasing = T) # sort the gene list
   
@@ -237,6 +260,7 @@ go_results <- function(x, y, type = c("ALL","BP","MF","CC")){
   return(go %>% 
            as.data.frame(.) %>% 
            dplyr::mutate(
+             ONTOLOGY = as.factor(ONTOLOGY),
              # Change gene ratio to numeric format
              GeneRatio = sapply(stringr::str_split(GeneRatio, "/"), 
                                 function(y) as.numeric(y[1])/as.numeric(y[2])),
@@ -246,7 +270,30 @@ go_results <- function(x, y, type = c("ALL","BP","MF","CC")){
              Count = as.numeric(Count)))
 }
 
+# Function to extract parent term of a GO term
+get_parent <- function(x, y){
+  parents <- GOMFPARENTS[[x]]
+  if (length(parents) > 1){
+    parents <- parents[which(parents %in% y)]
+  }
+  if (length(parents) == 0){
+    parents <- x
+  } # if the parent term is not in the list, return the term itself
+  if (as.character(parents) %in% c("GO:0003674","GO:0005488")){
+    parents <- x
+  } # if the parent term is molecular function or binding, return the term itself
+  return(parents)
+}
 
+# Function to map GO terms to super families
+map_to_super_family <- function(go_term, super_families) {
+  for (super_family in names(super_families)) {
+    if (go_term %in% super_families[[super_family]]) {
+      return(super_family)
+    }
+  }
+  return("Other")
+}
 # Function to create visualization for enrichment results
 make_dotplot <- function(mydata, Count, type=c("GO","KEGG")){
   attach(mydata)
@@ -311,30 +358,26 @@ make_dotplot <- function(mydata, Count, type=c("GO","KEGG")){
   }
 }
 
+
+
 # ---------------------- Semantic Similarity functions -------------------------
 # Function to calculate semantic similarity between GO terms and return the score
 # similarity matrix
 make_simMatrix <- function(list){
-  list(BP = calculateSimMatrix(list$BP$ID,
-                               orgdb= org.Hs.eg.db,
-                               ont="BP",
-                               method="Wang"),
-       CC = calculateSimMatrix(list$CC$ID,
-                               orgdb= org.Hs.eg.db,
-                               ont="CC",
-                               method="Wang"),
-       MF = calculateSimMatrix(list$MF$ID,
-                               orgdb= org.Hs.eg.db,
-                               ont="MF",
-                               method="Wang"))
+  .ontology = names(list)
+  .list = lapply(.ontology, function(x){
+    calculateSimMatrix(list[[x]]$ID, orgdb =org.Hs.eg.db, ont=x, method="Wang")
+  })
+  .list = setNames(.list, names(list))
+  return(.list)
 }
 
 # Function to reduce GO terms with high collinearity based on their semantic 
 # similarity scores
-get_reducedTerms <- function(simm, scores, treshold){
+get_reducedTerms <- function(simm, scores, limit){
   tmp <- reduceSimMatrix(simm,
                          scores,
-                         threshold = treshold,
+                         threshold = 0.9,
                          orgdb="org.Hs.eg.db")
   # Perform PCA on the reduced GO terms
   pca <- prcomp(simm)
@@ -345,7 +388,12 @@ get_reducedTerms <- function(simm, scores, treshold){
   
   tmp <- merge(tmp, pca, by = 'go')
   tmp$parentTerm <- as.factor(tmp$parentTerm)
-  subset <- tmp [ tmp$termDispensability == 0, ]
+
+  subset <- tmp %>% 
+    dplyr::group_by(cluster) %>% 
+    dplyr::arrange(desc(score)) %>%
+    dplyr::slice_head(n = limit) %>% 
+    dplyr::ungroup()
   
   return(list(reduced = tmp, subset = subset))
 }
@@ -375,12 +423,16 @@ make_GObase <- function (terms, genes) {
   terms$geneID <- toupper(terms$geneID)
   genes$geneID <- toupper(genes$geneID)
   # create arrays of involved gene's names for each GO term
-  tgenes <- strsplit(as.vector(terms$geneid), "/")
+  tgenes <- strsplit(as.vector(terms$geneID), "/")
   # count the number of genes for each GO term
   count <- sapply(1:length(tgenes), function(x) length(tgenes[[x]]))
   # get the logFC values for each gene
   logFC <- sapply(unlist(tgenes), function(x) {
-    genes$log2FoldChange[match(x, genes$geneID)]
+    if (!x %in% genes$geneID) {
+      return(0)
+    } else {
+      return(genes$log2FoldChange[match(x, genes$geneID)])
+    }
   })
   # make sure that the logFC values are numeric
   if (class(logFC) == "factor") {
@@ -392,7 +444,7 @@ make_GObase <- function (terms, genes) {
   for (c in 1:length(count)) {
     value <- 0
     e <- s + count[c] - 1
-    value <- sapply(logFC[s:e], function(x) ifelse(x > 0, 1, -1))
+    value <- sapply(logFC[s:e], function(x) ifelse(x > 0, 1, ifelse( x < 0, -1, 0)))
     # Z-score is the sum of the logFC values divided by the square root of the 
     # number of genes in the specific GO term
     zsc <- c(zsc, sum(value)/sqrt(count[c]))
@@ -480,7 +532,7 @@ compound_GOplot <-function (data) {
 
 # -------------------- Venn diagram & upset plots ------------------------------
 # Create and save a simple Venn diagram
-simple_venn <- function(set1, set2, set3, filename){
+simple_venn <- function(set1, set2, set3, names, filename){
   # Extract the gene sets
   tmp <- list(
     set1[,c("geneID","log2FoldChange")],
@@ -555,7 +607,158 @@ make_upsetbase <- function(table, vars){
   
   return(table)
 }
+# ----------------------- WGCNA analysis functions -----------------------------
+# Function to perform WGCNA analysis
+make_wgcna <- function(deseq, genes, power = 9, initial = TRUE){
+  # Create a matrix for the WGCNA analysis
+  matrix <- t(assay(vst(deseq[rownames(genes),])))
+  n_genes <- ceiling(ncol(matrix)/1000)*1000
+  
+  print(paste("Number of genes:", n_genes))
+  
+  if (initial){
+    # Calculate the soft threshold
+    powers = c(c(1:10), seq(from = 12, to = 20, by = 2))
+    
+    soft = WGCNA::pickSoftThreshold(
+      matrix,
+      powerVector = powers,
+      verbose = 5
+    )
+    
+    df = data.frame(soft$fitIndices) %>%
+      dplyr::mutate(model_fit = -sign(slope) * SFT.R.sq)
+    
+    plot = ggplot(df, aes(x = Power, y = model_fit, label = Power)) +
+      # Plot the points
+      geom_point() +
+      # We'll put the Power labels slightly above the data points
+      geom_text(nudge_y = 0.1) +
+      # We will plot what WGCNA recommends as an R^2 cutoff
+      geom_hline(yintercept = 0.80, col = "red") +
+      # Just in case our values are low, we want to make sure we can still see the 0.80 level
+      ylim(c(min(df$model_fit), 1.05)) +
+      # We can add more sensible labels for our axis
+      xlab("Soft Threshold (power)") +
+      ylab("Scale Free Topology Model Fit, signed R^2") +
+      ggtitle("Scale independence") +
+      # This adds some nicer aesthetics to our plot
+      theme_classic()
+    
+    return(list(vst = matrix, soft = df, plot = plot))
+  } else {
+    temp_cor <- cor       
+    cor <- WGCNA::cor # Force it to use WGCNA cor function 
+                      # (fix a namespace conflict issue)
+    # Perform the WGCNA analysis
+    wgcna <- WGCNA::blockwiseModules(matrix,
+                                     # == Adjacency Function ==
+                                     power = power,               
+                                     networkType = "signed",
+                                     # == Tree and Block Options ==
+                                     deepSplit = 2,
+                                     pamRespectsDendro = F,
+                                     detectCutHeight = 0.75,
+                                     minModuleSize = 30,
+                                     maxBlockSize = n_genes,
+                                     # == Module Adjustments ==
+                                     reassignThreshold = 0,
+                                     mergeCutHeight = 0.25,
+                                     # == TOM == Archive the run results in TOM file (saves time)
+                                     saveTOMs = T,
+                                     saveTOMFileBase = "ER",
+                                     # == Output Options
+                                     numericLabels = T,
+                                     verbose = 3)
+    return(wgcna)
+  }
+  # Create a data frame for the WGCNA analysis
+}
 
+# Function to extract module genes and their expression
+get_modules <- function(wgcna, plot_name){
+  # Convert labels to colors for plotting
+  mergedColors <- WGCNA::labels2colors(wgcna$colors)
+  # Plot the dendrogram and the module colors underneath
+  modules <- data.frame(
+    gene_id = names(wgcna$colors),
+    colors = WGCNA::labels2colors(wgcna$colors)
+  )
+  #
+  svg(file.path(date, plots_dir, paste0(plot_name, ".svg")),
+      width = 18, height = 10)
+  WGCNA::plotDendroAndColors(
+    wgcna$dendrograms[[1]],
+    mergedColors[wgcna$blockGenes[[1]]],
+    "Module colors",
+    dendroLabels = FALSE,
+    hang = 0.03,
+    addGuide = TRUE,
+    guideHang = 0.05)
+  dev.off()
+  
+  return(modules)
+}
+
+module_expr <- function(expr, filter = c(''), colors){
+  # Create a data frame for the module expression
+  df <- expr %>% 
+    dplyr::filter(! gene_id %in% filter)
+  
+  plot <- ggplot(df, aes(x = condition, y = averageExpr)) +
+           geom_boxplot(aes(fill = module), position = "dodge") +
+           geom_jitter(aes(group = module), color = "grey",
+                       alpha = .5, position = position_jitter(width = 0.1)) +
+           theme_bw() +
+           scale_y_continuous(position = "right") +
+           theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+           labs(title = "WGCNA Modules",
+                x = "",
+                y = "Average normalized expression")
+  
+  if (ncol(df) > 4){
+    plot <- plot + 
+      scale_fill_manual(
+        name = "Cluster",
+        values = colors) +
+      facet_grid(rows = vars(df[,5]))
+  } else {
+    plot <- plot + 
+      facet_wrap(~module)
+  }
+  return(plot)
+}
+# Function to visualize WGCNA module-trait correlations
+module_corr <- function(module, colors, expression){
+  # Get Module Eigengenes per cluster and reorder
+  # them so similar modules are next to each other
+  MEs0 <- WGCNA::orderMEs(module)
+  
+  
+  plot <- draw(ComplexHeatmap::Heatmap(
+    t(MEs0),
+    name = "Module eigengenes",
+    col = colorRamp2(c(min(MEs0), 0, max(MEs0)),
+                     c("blue", "white", "red")),
+    show_column_dend = T, show_column_names = T,
+    show_row_names = T, show_row_dend = T,
+    column_dend_reorder = F, row_split = 3,
+    row_dend_reorder = F,
+    clustering_distance_columns = "euclidean",
+    column_title = "Module eigengenes",
+    row_title = "Modules",
+    cell_fun = function(j, i, x, y, width, height, fill) {
+      grid.text(sprintf("%.3f", t(dt)[i, j]), x, y, gp = gpar(fontsize = 5, angle = 90))},
+    row_names_gp = gpar(fontsize = 8),
+    column_title_gp = gpar(fontsize = 12),
+    row_title_gp = gpar(fontsize = 12),
+    bottom_annotation = heatmap.annot,
+    heatmap_legend_param = list(title = "Module eigengenes"),
+    width = unit(10, "cm"),
+    height = unit(10, "cm")
+  ))
+  return(list(plot = plot))
+}
 # ----------------------- Heatmap functions ------------------------------------
 make_matrix <- function(mat, filter){
   # Calculate normalized expression values
@@ -564,4 +767,83 @@ make_matrix <- function(mat, filter){
   
   return(mat)
   rm(mat)
+}
+
+make_heatmap <- function(deseq, expr, dend, module, filter, coldata){
+  # Create a expression matrix for the heatmap
+  matrix <- make_matrix(assay(deseq), 
+                        module[filter, "gene_id"])
+  # Create annotation for conditions and patients (columns)
+  column.annot <- HeatmapAnnotation(
+    patient = as.factor(coldata[["patient"]]),
+    condition = as.factor(coldata[["condition"]]),
+    show_annotation_name = F,
+    col =list(patient = c("593" = "navy", "673" = "khaki"),
+              condition = c("normoxia.2D" = "steelblue",
+                            "hypoxia.2D" = "salmon",
+                            "physioxia.3D" = "red",
+                            "physioxia.Tumour" = "darkred")))
+  # Create annotation for WGCNA modules and module colors (rows)
+  row.annot <- rowAnnotation(
+    module = as.factor(module[filter, "colors"]),
+    col = list(module = c(
+      setNames(levels(as.factor(module[filter, "colors"])),
+               levels(as.factor(module[filter, "colors"])))
+    )),
+    show_annotation_name = T, annotation_label = "Module colors", 
+    width = unit(1, "in"))
+  # Create the normalized expression heat map
+  hm1 <- Heatmap(matrix, name = "Normalized expression",
+                cluster_rows = dend,
+                show_column_dend = T, show_column_names = F,
+                show_row_names = F, show_row_dend = F,
+                cluster_columns = T, 
+                clustering_distance_columns = "spearman",
+                clustering_method_columns = "complete",
+                column_dend_reorder = T,
+                col = colorRamp2(c(min(matrix), 0, max(matrix)), 
+                                 c("green","black","red")),
+                left_annotation = row.annot,
+                bottom_annotation = column.annot)
+  # Create the differential expression heat map
+  hm2 <- Heatmap(as.matrix(expr), name = "log2FC",
+                 na_col = "white", border = T,
+                 cluster_rows = dend,
+                 cluster_columns = F,
+                 show_column_dend = F, 
+                 column_title = "Expression change",
+                 show_column_names = T, show_row_names = F)
+  # Merge the heat maps
+  plot <- draw(hm1 + hm2, merge_legend = T, padding = unit(c(15, 2, 2, 2), "mm"))
+  
+  return(list(matrix = matrix, plot = plot))
+}
+
+
+
+# ----------------------- SURFME functions -------------------------------------
+# Function to perform SURFME analysis
+get_CategoryExpressionPlot <- function(results, diff_genes, genes){
+  subset <- subset.data.frame(results, subset = geneID %in% genes)
+  colourPalette <- c('#c1c1c1', '#363636','#222222', '#000f64','#841f27')
+  
+  return(ggplot(data = na.omit(results)) 
+         + geom_point(mapping = aes(x = log2FoldChange, y = -log10(padj), 
+                                    colour = significance), size = 2.5) 
+         + geom_point(data = subset, mapping = aes(x = log2FoldChange, y = -log10(padj)),
+                      size = 2.5, fill = "transparent", colour = I (alpha ("yellow", 0.6) )) 
+         + scale_color_manual(values = colourPalette) 
+         + labs( x = expression(paste(log[2], 'FoldChange')),
+                 y = expression(paste(log[10], italic('P')))) 
+         + theme(axis.title = element_text(size = 14), 
+                 axis.text = element_text(size = 14), 
+                 legend.position = 'none') 
+         + coord_cartesian(ylim = c(0, -log10(min(results$padj))))
+         + geom_vline(xintercept = c(-(1.5), 1.5), linetype = 'dotted', size = 1) 
+         + geom_hline(yintercept = -log10(0.05), linetype = 'dotted', size = 1) 
+         + geom_label_repel(data = subset, aes(x = log2FoldChange, y = -log10(padj)),
+                            colour = 'black', position = 'identity', max.overlaps = 20,
+                            show.legend = F, label.padding = .5, direction = "both",
+                            label = paste(subset$geneID)))
+  
 }
