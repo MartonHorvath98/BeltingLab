@@ -42,6 +42,9 @@ suppressPackageStartupMessages(library(forcats))
 if (!require("numbers")) install.packages("numbers")
 suppressPackageStartupMessages(library(numbers))
 # provides a set of functions to format numbers
+if (!require("conicfit")) install.packages("conicfit")
+suppressPackageStartupMessages(library(conicfit))
+# provides a set of functions to fit a conic section to a set of points
 
 # 3.) Differential expression ##################################################
 
@@ -55,20 +58,16 @@ suppressPackageStartupMessages(library(fdrtool))
 if (!require("edgeR")) install.packages("edgeR")
 suppressPackageStartupMessages(library(edgeR))
 # provides methods to test for differential expression in count data
-if (!require("limma")) install.packages("limma")
-suppressPackageStartupMessages(library(limma))
-# provides methods to test for differential expression in microarray data
-if (!require("lme4")) install.packages("lme4")
-suppressPackageStartupMessages(library(lme4))
-# provides methods to fit linear mixed-effects models
-if (!require("lmerTest")) install.packages("lmerTest")
-suppressPackageStartupMessages(library(lmerTest))
-# provides methods to test the significance of fixed effects in linear mixed-
-# effects models
-if (!require("glmmSeq")) install.packages("glmmSeq")
-suppressPackageStartupMessages(library(glmmSeq))
-# provides methods to test for differential expression in RNA-seq data using
-# generalized linear mixed models
+if (!require("WGCNA")) install.packages("WGCNA")
+suppressPackageStartupMessages(library(WGCNA))
+# provides a set of functions to perform weighted gene co-expression network
+# analysis
+if (!require("GenomicFeatures")) BiocManager::install("GenomicFeatures", update = F)
+suppressPackageStartupMessages(library(GenomicFeatures))
+# provides a set of functions to work with genomic features
+if (!require("granulator", quietly = TRUE)) BiocManager::install("granulator", update=F)
+suppressPackageStartupMessages(library(granulator))
+# provides a set of functions to perform gene set enrichment analysis
 
 # 4.) Gene ontology enrichment ################################################
 if (!require("clusterProfiler")) install.packages("clusterProfiler")
@@ -131,4 +130,12 @@ if (!require("ComplexHeatmap")) install.packages("ComplexHeatmap",
                                                  repos = BiocManager::repositories(),
                                                  type = "source")
 suppressPackageStartupMessages(library(ComplexHeatmap))
-# provides a set of functions to create complex heatmaps
+# provides a set of functions to create complex heat maps
+if (!require("circlize")) install.packages("circlize")
+suppressPackageStartupMessages(library(circlize))
+# provides a set of functions to create circular plots
+if (!require("TidyMultiqc")) install.packages("TidyMultiqc", 
+                                               repos = BiocManager::repositories(),
+                                               type = "source")
+suppressPackageStartupMessages(library(TidyMultiqc))
+# provides a set of functions to create MultiQC plots
