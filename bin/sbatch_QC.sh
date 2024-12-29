@@ -4,7 +4,7 @@
 #SBATCH -t 2:00:00
 #SBATCH -J rna-core
 
-# Marton Horvath, April 2024
+# Marton Horvath, APR 2024 - last modified: APR 2024
 
 # ------------ Load needed modules ------------ #
 # Load bioinfo-tools with programs
