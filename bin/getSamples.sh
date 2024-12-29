@@ -1,5 +1,7 @@
 #! bin/bash
 
+# Marton Horvath, Feb 2024
+
 # Take user arguments: input-, config- and output directories
 while getopts i:c:o: flag
 do
