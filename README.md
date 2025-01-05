@@ -15,9 +15,8 @@
   - [2.1. Quality Control](#21-quality-control)
   - [2.2. Prepare reference genome](#22-prepare-reference-genome)
   - [2.3. Read mapping](#23-read-mapping)
-    - [2.3.1 HISAT2](#231-hisat2)
-    - [2.3.2 STAR](#232-star)
-  - [2.4. Create report](#24-create-report)
+  - [2.4. Fusion detecetion](#24-fusion-detection)
+  - [2.5. Create report](#25-create-report)
 
 ## 1.1. Introduction
 

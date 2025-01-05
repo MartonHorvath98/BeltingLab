@@ -11,10 +11,10 @@
 
 # RStudio files
 .Rproj.user/
+.Rproj
 
 # R Environment Variables
 .Renviron
-
 
 # Temporary files created by R markdown
 *.utf8.md
@@ -29,7 +29,7 @@ plots/
 report/ 
 
 # Reference genome
-grch38/
+refs/
 
 # Report
 *.pptx

@@ -48,7 +48,7 @@ suppressPackageStartupMessages(library(conicfit))
 
 # 3.) Differential expression ##################################################
 
-if (!require("DESeq2")) install.packages("DESeq2")
+if (!require("DESeq2")) BiocManager::install("DESeq2", update = F)
 suppressPackageStartupMessages(library(DESeq2))
 # provides methods to test for differential expression in count data
 if (!require("fdrtool")) install.packages("fdrtool")
@@ -58,6 +58,9 @@ suppressPackageStartupMessages(library(fdrtool))
 if (!require("edgeR")) install.packages("edgeR")
 suppressPackageStartupMessages(library(edgeR))
 # provides methods to test for differential expression in count data
+if (!require("preprocessCore")) BiocManager::install("preprocessCore", update = F)
+suppressPackageStartupMessages(library(preprocessCore))
+# Provides a set of functions to preprocess microarray data
 if (!require("WGCNA")) install.packages("WGCNA")
 suppressPackageStartupMessages(library(WGCNA))
 # provides a set of functions to perform weighted gene co-expression network
@@ -65,7 +68,7 @@ suppressPackageStartupMessages(library(WGCNA))
 if (!require("GenomicFeatures")) BiocManager::install("GenomicFeatures", update = F)
 suppressPackageStartupMessages(library(GenomicFeatures))
 # provides a set of functions to work with genomic features
-if (!require("granulator", quietly = TRUE)) BiocManager::install("granulator", update=F)
+if (!require("granulator")) BiocManager::install("granulator", update=F)
 suppressPackageStartupMessages(library(granulator))
 # provides a set of functions to perform gene set enrichment analysis
 
@@ -80,17 +83,13 @@ if (!require("GO.db")) install.packages("GO.db")
 suppressPackageStartupMessages(library(GO.db))
 # provides a set of functions to map between gene identifiers and gene ontology
 # terms
-if (!require("topGO")) install.packages("topGO")
+if (!require("topGO")) BiocManager::install("topGO", update = F)
 suppressPackageStartupMessages(library(topGO))
 # provides a set of functions to perform gene ontology enrichment analysis
-if (!require("rrvgo")) install.packages("rrvgo")
+if (!require("rrvgo")) BiocManager::install("rrvgo", update = F)
 suppressPackageStartupMessages(library(rrvgo))
 # provides a set of functions to perform gene ontology enrichment analysis
-if (!require("GOSim")) install.packages("GOSim")
-suppressPackageStartupMessages(library(GOSim))
-# provides a set of functions to calculate semantic similarity between gene
-# ontology terms
-if (!require("GOSemSim")) install.packages("GOSemSim")
+if (!require("GOSemSim")) BiocManager::install("GOSemSim", update = F)
 suppressPackageStartupMessages(library(GOSemSim))
 # provides a set of functions to calculate semantic similarity between gene
 # ontology terms
@@ -139,3 +138,6 @@ if (!require("TidyMultiqc")) install.packages("TidyMultiqc",
                                                type = "source")
 suppressPackageStartupMessages(library(TidyMultiqc))
 # provides a set of functions to create MultiQC plots
+if (!require("igraph")) install.packages("igraph")
+suppressPackageStartupMessages(library(igraph))
+# provides a set of functions to create network plots
