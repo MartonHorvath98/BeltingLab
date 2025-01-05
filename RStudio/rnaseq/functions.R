@@ -23,6 +23,17 @@ bind_df <- function(go, kegg){
   return(df)
 }
 
+# A function to calculate TPM values based on a count matrix and feature lengths
+get_TPM <- function(counts, effLen){
+  n <- gsub("\\..*", "", names(effLen))
+  g <- intersect(n, rownames(counts))
+  
+  effLen <- effLen[which(n %in% g)]
+  x <- counts / effLen
+  tpm.mat <- t( t(x) * 1e6 / colSums(x))
+  
+  return(tpm.mat)
+}
 
 # ----------------- Differential expression analysis functions -----------------
 # Function to perform differential expression analysis using DESeq2
@@ -50,7 +61,7 @@ get_results <- function(dds, sig_log2FC, sig_pval, contrast = NULL, name = NULL)
   tmp <- results(dds, contrast = contrast, name = name,
                  independentFiltering = T, pAdjustMethod = "BH", alpha = 0.05)
   # Perform multiple testing correction
-  fdr <- fdrtool(tmp$stat, statistic = "normal")
+  fdr <- fdrtool(tmp$stat, statistic = "normal", plot = F)
   tmp$padj <- p.adjust(fdr$pval, method = "BH")
   # Create a data frame from the results table
   df <- data.frame(tmp, 
@@ -71,8 +82,8 @@ get_results <- function(dds, sig_log2FC, sig_pval, contrast = NULL, name = NULL)
         log2FoldChange < (-1)*sig_log2FC & padj < sig_pval ~ 'Signif. down-regulated',
         log2FoldChange > sig_log2FC & padj < sig_pval ~ 'Signif. up-regulated',
         T ~ 'NS')) %>%
-    dplyr::relocate(c("ensemblID","geneID","entrezID"), .after = everything()) %>% 
-    dplyr::filter(complete.cases(.))
+    dplyr::relocate(c("ensemblID","geneID","entrezID"), .after = everything()) #%>% 
+    #dplyr::filter(complete.cases(.))
   
   # Create a data frame with only significant results
   sig_df <- df %>%
@@ -160,33 +171,36 @@ make_vulcanplot <- function(total, sig){
   # Create a ggplot object
   return((ggplot(data = na.omit(total), 
                  aes(x = log2FoldChange, 
-                     y = -log10(padj), 
-                     colour = significance)) 
-          + geom_point(mapping = aes(), inherit.aes = T, size = 2.5) 
-          + scale_color_manual(values = c(
-            "NS" = "#c1c1c1",
-            "Log10P" = '#363636',
-            "Log2FoldChange" = '#767676',
-            "Signif. up-regulated" = '#841f27',
-            "Signif. down-regulated" = '#000f64'
-          ))
+                     y = -log10(pvalue))) 
+          + geom_point(mapping = aes(), color = "#c1c1c1", alpha = .3,
+                       inherit.aes = T, size = 2.5, show.legend = F) 
+          + geom_point(data = na.omit(sig), alpha = .7,
+                       aes(color = significance), size = 2.5)
+          + scale_color_manual(
+            values = c(
+              "Signif. up-regulated" = '#841f27',
+              "Signif. down-regulated" = '#000f64'),
+            guide = guide_legend(title = "Significance: ",
+                                 override.aes = list(alpha = 1))
+          )
           + labs(x = expression(paste(log[2], 'FoldChange')),
-                 y = expression(paste(log[10], italic('FDR')))) 
+                 y = expression(paste(log[10], italic('P-value')))) 
           + theme(axis.title = element_text(size = 14), 
                   axis.text = element_text(size = 14), 
                   legend.position = 'none') 
           + scale_x_continuous(expand = expansion(0.2))
-          # Visualize log2FC threshold
-          + geom_vline(xintercept = c(-1.5, 1.5), 
-                       linetype = 'dotted', size = 1) 
-          # Visualize adjusted p-value threshold
-          + geom_hline(yintercept = -log10(0.05), 
-                       linetype = 'dotted', size = 1)
+          # # Visualize log2FC threshold
+          # + geom_vline(xintercept = c(-1.5, 1.5), 
+          #              linetype = 'dotted', size = 1) 
+          # # Visualize adjusted p-value threshold
+          # + geom_hline(yintercept = -log10(0.05), 
+          #              linetype = 'dotted', size = 1)
           # Add labels for significantly up- or down-regulated genes
           + geom_text(data = na.omit(sig), hjust = 0, vjust = 1.5, 
                       colour = 'black', position = 'identity', 
                       show.legend = F, check_overlap = T,
-                      label = na.omit(sig)[,"geneID"])))
+                      label = na.omit(sig)[,"geneID"]))
+         + theme_minimal())
 }
 
 merge_vulcanplots <- function(p1, p2, p3, titles){
@@ -194,13 +208,12 @@ merge_vulcanplots <- function(p1, p2, p3, titles){
                          guides(colour = guide_legend(title = "Significance: ")) + 
                          theme(legend.position="bottom", legend.box="horizontal",
                                legend.text = element_text(size = 12),
-                               legend.title = element_text(size = 12),
-                               legend.key = element_rect(fill = NA)))
+                               legend.title = element_text(size = 12)))
   
   return(plot <- cowplot::plot_grid(
-    p1 + ggtitle(titles[1]),
-    results.593.3D_vs_2DN$plot + ggtitle(titles[2]), 
-    results.593.Tumor_vs_2DN$plot + ggtitle(titles[3]),
+    p1 + ggtitle(titles[1]) + theme(legend.position = "none"),
+    p2 + ggtitle(titles[2]) + theme(legend.position = "none"),
+    p3 + ggtitle(titles[3]) + theme(legend.position = "none"),
     ggplot() + theme_void(),
     legend,
     ggplot() + theme_void(),
@@ -209,65 +222,307 @@ merge_vulcanplots <- function(p1, p2, p3, titles){
 
 # ------------- Functions for overrepresentation analyses ----------------------
 # Function to extract gene lists for KEGG pathway enrichment analysis
-get_genelist <- function(df, filter){
+get_genelist <- function(.df, .filter){
+  
   # Extract the background gene list of every expressed gene
-  background <- df %>%
-    dplyr::arrange(desc(log2FoldChange)) %>%
+  background <- .df %>%
+    dplyr::mutate(effect_size=-log10(padj)*log2FoldChange) %>% 
+    dplyr::arrange(desc(effect_size)) %>%
     dplyr::distinct(entrezID, .keep_all = T) %>%
-    dplyr::pull("log2FoldChange", name ="entrezID")
+    dplyr::filter(complete.cases(.)) %>%
+    dplyr::pull("effect_size", name ="entrezID")
   # Extract the gene list of interest of DEGs
-  interest <- df %>%
-    dplyr::filter(entrezID %in% filter) %>%
-    dplyr::pull("log2FoldChange", name ="entrezID")
-  interest <- sort(interest, decreasing = T) # sort the gene list
+  interest <- .df %>%
+    dplyr::mutate(effect_size=-log10(padj)*log2FoldChange) %>% 
+    dplyr::filter(.filter) %>%
+    dplyr::arrange(desc(effect_size)) %>%
+    dplyr::filter(complete.cases(.)) %>%
+    dplyr::pull("effect_size", name ="entrezID")
   
   return(list(background = background, interest = interest))
 }
 
-# Function to perform KEGG pathway enrichment analysis
-kegg_results <- function(x, y){
-  # Perform KEGG pathway enrichment analysis
-  kegg <- enrichKEGG(names(x), # gene set of interest
-                     organism = 'hsa', # human pathway database
-                     keyType = 'kegg',
-                     universe = names(y), # background gene set
-                     pvalueCutoff = 0.05) # return only significant results
-  
-  # Transform the results into a data frame
-  return(setReadable(kegg, org.Hs.eg.db,"ENTREZID") %>%
-           as.data.frame(.) %>% 
-           dplyr::mutate(
-             # Change gene ratio to numeric format
-             GeneRatio = sapply(stringr::str_split(GeneRatio, "/"), 
-                                function(y) as.numeric(y[1])/as.numeric(y[2])),
-             # Change background ratio to numeric format
-             BgRatio = sapply(stringr::str_split(BgRatio, "/"), 
-                              function(y) as.numeric(y[1])/as.numeric(y[2])),
-             Count = as.numeric(Count)))
+get_zscore <- function(df, .expr, column = "geneID") {
+  # make sure that the gene symbols are comparable
+  genes <- toupper(df[[column]])
+  .expr$geneID <- toupper(.expr$geneID)
+  # create arrays of involved gene's names for each GO term
+  tgenes <- strsplit(as.vector(genes), "/")
+  # count the number of genes for each GO term
+  count <- sapply(1:length(tgenes), function(x) length(tgenes[[x]]))
+  # get the logFC values for each gene
+  logFC <- sapply(unlist(tgenes), function(x) {
+    if (!x %in% .expr$geneID) {
+      return(0)
+    } else {
+      return(.expr$log2FoldChange[match(x, .expr$geneID)])
+    }
+  })
+  # make sure that the logFC values are numeric
+  if (class(logFC) == "factor") {
+    logFC <- gsub(",", ".", gsub("\\.", "", logFC))
+    logFC <- as.numeric(logFC)
+  }
+  s <- 1
+  zsc <- c()
+  for (c in 1:length(count)) {
+    value <- 0
+    e <- s + count[c] - 1
+    value <- sapply(logFC[s:e], function(x) ifelse(x > 0, 1, ifelse( x < 0, -1, 0)))
+    # Z-score is the sum of the logFC values divided by the square root of the 
+    # number of genes in the specific GO term
+    zsc <- c(zsc, sum(value)/sqrt(count[c]))
+    s <- e + 1
+  }
+  df$zscore <- zsc
+  return(df)
 }
 
-# Function to perform GO enrichment analysis
-go_results <- function(x, y, type = c("ALL","BP","MF","CC")){
-  # Perform GO enrichment analysis
-  go <- enrichGO(names(x), # gene set of interest
-                 'org.Hs.eg.db', # human gene annotation database
-                 keyType = 'ENTREZID',
-                 universe = names(y), # background gene set
-                 ont = type,
-                 readable = T) # return results with gene symbol annotation
 
-  # Transform the results into a data frame
-  return(go %>% 
-           as.data.frame(.) %>% 
-           dplyr::mutate(
-             ONTOLOGY = as.factor(ONTOLOGY),
-             # Change gene ratio to numeric format
-             GeneRatio = sapply(stringr::str_split(GeneRatio, "/"), 
-                                function(y) as.numeric(y[1])/as.numeric(y[2])),
-             # Change background ratio to numeric format
-             BgRatio = sapply(stringr::str_split(BgRatio, "/"), 
-                              function(y) as.numeric(y[1])/as.numeric(y[2])),
-             Count = as.numeric(Count)))
+run_ora <- function(.interest, .background, .pathways){
+  ora <- enricher(gene = names(.interest), # gene set of interest 
+                  pvalueCutoff = 1, 
+                  qvalueCutoff = 1,
+                  pAdjustMethod = "BH", 
+                  universe = names(.background), # background gene set
+                  TERM2GENE = dplyr::select(
+                    .pathways,
+                    gs_name,
+                    human_entrez_gene))
+  ora <- setReadable(ora, org.Hs.eg.db, keyType = "ENTREZID")
+  return(list("ora" = ora))
+}
+
+extract_ora_results <- function(.ora, .db, .expr){
+  .db <- .db %>% 
+    dplyr::select(gs_name, gs_exact_source, gs_description) %>% 
+    dplyr::distinct()
+  # extract data frames
+  df <- as.data.frame(.ora@result)
+  # order on p-value
+  df <- df[order(df$`p.adjust`, decreasing = F),]
+  # change gene ratio to numeric values
+  df <- df %>% 
+    dplyr::select(!zScore) %>% 
+    dplyr::mutate(GeneRatio = sapply(stringr::str_split(df$GeneRatio, "/"), 
+                              function(x) 100*(as.numeric(x[1])/as.numeric(x[2]))),
+           BgRatio = sapply(stringr::str_split(df$BgRatio, "/"), 
+                            function(x) 100*(as.numeric(x[1])/as.numeric(x[2]))))
+  # extract pathway IDs and description from database
+  
+  # add the pathway IDs and descriptions to the data frame
+  ids <- df$ID
+  database <- sapply(stringr::str_split(ids, "_"), 
+                     function(x) return(x[1]))
+  
+  df$ID = .db[match(ids, .db$gs_name),][["gs_exact_source"]]
+  df$Description = .db[match(ids, .db$gs_name),][["gs_description"]]
+  df$Database = database
+  
+  # calculate activation z-score
+  df = get_zscore(df, .expr)
+
+  # extract significant results: adjusted p-value < 0.05
+  sig_df <- df %>% 
+    dplyr::filter(p.adjust < 0.05)
+  
+  #return data frames
+  return(list("df" = df, "sig_df" = sig_df))
+}
+
+# III. GENE SET ENRICHMENT ANALYSIS
+run_gsea <- function(.geneset, .terms){
+  set.seed(42)
+  ## run the GSEA analysis
+  res <- GSEA(
+    geneList = .geneset, # gene set of interest (ordered on effect size)
+    minGSSize = 10, # minimum size of the gene set
+    maxGSSize = 500, # maximum size of the gene set
+    pvalueCutoff =1, # adjusted p-value cutoff
+    eps =  0, # p-value cutoff (minimum)
+    seed = TRUE, # seed for reproducibility
+    pAdjustMethod = "BH", # p-value adjustment method
+    TERM2GENE = dplyr::select(
+      .terms,
+      gs_name,
+      human_entrez_gene
+    ))
+  res <- setReadable(res, org.Hs.eg.db, keyType = "ENTREZID")
+  
+  # extract data frame
+  return(list("gsea" = res))
+}
+
+extract_gsea_results <- function(.gsea, .db, .expr){
+  .db <- .db %>% 
+    dplyr::select(gs_name, gs_exact_source, gs_description) %>% 
+    dplyr::distinct()
+  # extract data frames
+  df <- as.data.frame(.gsea@result)
+  # order on p-value
+  df <- df[order(df$`p.adjust`, decreasing = F),]
+  
+  df <- df %>%
+    dplyr::mutate(Direction = dplyr::case_when(NES > 0 ~ '+',
+                                               NES < 0 ~ '-'))
+  df <- df %>%
+    dplyr::mutate(
+      Database = sapply(stringr::str_split(ID, "_"), 
+                        function(x) return(x[1])),
+      Name = sapply(stringr::str_split(ID, "_"), 
+                    function(x) return(paste(x[-1], collapse = "_"))))
+  
+  # add the pathway IDs and descriptions to the data frame
+  ids <- df$ID
+  df$ID = .db[match(ids, .db$gs_name),][["gs_exact_source"]]
+  df$Description = .db[match(ids, .db$gs_name),][["gs_description"]]
+  
+  # calculate activation z-score
+  df = get_zscore(df, .expr, column = "core_enrichment")
+  
+  # extract significant results: adjusted p-value < 0.05
+  sig_df <- df %>% 
+    dplyr::filter(p.adjust < 0.05)
+  
+  #return data frames
+  return(list("df" = df, "sig_df" = sig_df))
+}
+
+
+cluster_enrichment <- function(.df, .db, column = "core_enrichment"){
+  # 1.) Transform enriched terms to a long data table format
+  table <- .df %>%
+    dplyr::select(ID | tidyselect::starts_with(column)) %>%
+    # Pivot the data frame to long format
+    tidyr::pivot_longer(cols = tidyselect::starts_with(column),
+                        values_to = "Genes", names_to = "Region") %>%
+    tidyr::separate_rows(Genes, sep = "/") %>%
+    dplyr::distinct(., .keep_all = T) %>% 
+    # Group by geneID and concatenate the regions for genes in intersecting sets
+    dplyr::mutate(Region = gsub(paste0(column, "."), "", Region)) %>%
+    dplyr::group_by(ID, Genes) %>%
+    dplyr::mutate(Region = paste(Region, collapse = "-")) %>% 
+    # Filter out missing values
+    dplyr::filter(!is.na(Genes)) %>% 
+    dplyr::ungroup()
+  
+  # 2.) Calculate the similarity between enriched terms
+  genes <- unique(table$Genes)
+  total.pathway <- unique(table$ID)
+  # Extract complete gene set of the background
+  tmp <- list()
+  for (p in total.pathway){
+    tmp[[p]] <- .db %>%
+      dplyr::filter(gs_exact_source == p) %>%
+      dplyr::pull(gene_symbol)
+  }
+  # Create a kappa matrix 
+  total.pathway <- tmp
+  N <- length(total.pathway)
+  kappa_mat <- matrix(0, nrow = N, ncol = N,
+                      dimnames = list(names(total.pathway),
+                                      names(total.pathway)))
+  diag(kappa_mat) <- 1
+  # Populate the kappa matrix 
+  total <- length(genes)
+  for (i in 1:(N - 1)) {
+    for (j in (i + 1):N) {
+      genes_i <- total.pathway[[i]]
+      genes_j <- total.pathway[[j]]
+      both <- length(intersect(genes_i, genes_j))
+      term_i <- length(base::setdiff(genes_i, genes_j))
+      term_j <- length(base::setdiff(genes_j, genes_i))
+      no_terms <- total - sum(both, term_i, term_j)
+      observed <- (both + no_terms)/total
+      chance <- (both + term_i) * (both + term_j)
+      chance <- chance + (term_j + no_terms) * (term_i +
+                                                  no_terms)
+      chance <- chance/total^2
+      kappa_mat[j, i] <- kappa_mat[i, j] <- (observed -
+                                               chance)/(1 - chance)
+    }
+  }
+  # Calculate similarity between pathways
+  clu <- stats::hclust(stats::as.dist(1 - kappa_mat), method = "average")
+  
+  stats::heatmap(kappa_mat, distfun = function(x) stats::as.dist(1 - x), hclustfun = function(x) stats::hclust(x, method = "average"))
+ 
+  kmax <- max(nrow(kappa_mat)%/%2, 2)
+  if (kmax < 20) {
+    kseq <- c(1:kmax)
+  } else if (kmax < 50) {
+    kseq <- c(2:19, seq(20, kmax %/% 10 * 10, 5))
+  } else if (kmax < 200) {
+    kseq <- c(2:19, seq(20, 49, 5), seq(50, kmax %/% 10 * 10, 10))
+  } else {
+    kseq <- c(2:19, seq(20, 99, 20), seq(100, kmax %/% 10 * 10, 50))
+  }
+  avg_sils <- c()
+  avg_sils <- c()
+  for (k in kseq) {
+    avg_sils <- c(avg_sils, fpc::cluster.stats(stats::as.dist(1 - kappa_mat),
+                                               stats::cutree(clu, k = k),
+                                               silhouette = TRUE)$avg.silwidth)
+  }
+  k_opt <- kseq[which.max(avg_sils)]
+  graphics::plot(clu)
+  stats::rect.hclust(clu, k = k_opt)
+  
+  # Add clusters to the table
+  clusters <- stats::cutree(clu, k = k_opt)
+  clu_idx <- match(table[["ID"]], names(clusters))
+  table$Cluster <- clusters[clu_idx]
+  
+  # 3.) Calculate the weight of each term
+  linkage <- .df %>%
+    #dplyr::inner_join(table[,c("ID","Cluster")], by = "ID") %>%
+    dplyr::mutate(rank = 3 - rowSums(is.na(.)/3),
+                  global.p = rowMeans(.df[,c(5,9,13)], na.rm = T)) %>% 
+    dplyr::select(ID, rank, global.p) %>%
+    dplyr::left_join(table, by = "ID") %>% 
+    dplyr::group_by(Cluster, rank) %>% 
+    dplyr::arrange(desc(rank), global.p) %>% 
+    dplyr::rowwise() %>% 
+    dplyr::mutate(weight = rank*(-log10(global.p))*length(unlist(strsplit(Region, "-")))) 
+  
+  linkage <- linkage %>%
+    dplyr::rowwise() %>%
+    dplyr::mutate(weight = as.numeric(weight/max(linkage$weight))) %>%
+    dplyr::ungroup() %>%
+    dplyr::select(c("Genes", "ID", "weight", "Cluster")) %>%
+    setNames(.,c("node1", "node2", "weight", "cluster")) %>%
+    as.data.frame(.)
+  
+  
+  net <- graph_from_data_frame(linkage)
+  net <- simplify(net, remove.multiple = F, remove.loops = T)
+  hs <- hub_score(net, scale = T, weights = linkage$weight)$vector
+  
+  
+  linkage <- linkage %>%
+    rowwise() %>% 
+    dplyr::mutate(hub_score = hs[which(names(hs) == node1)])
+  
+  hub_scores <- linkage %>% 
+    dplyr::group_by(node2, cluster) %>% 
+    dplyr::summarise(hub_score = sum(hub_score, na.rm = T))
+  
+  .df = .df %>% 
+    dplyr::right_join(., hub_scores, by = c("ID" = "node2"))
+
+  representative.terms <- .df %>%
+    dplyr::group_by(cluster) %>%
+    dplyr::arrange(desc(hub_score)) %>%
+    dplyr::slice_head(n = 1) %>%
+    dplyr::pull(ID)
+
+  .df <- .df %>%
+    dplyr::rowwise(.) %>%
+    dplyr::mutate(Type = ifelse(ID %in% representative.terms,
+                                "Representative", "Member")) %>% 
+    dplyr::ungroup(.)
+  
+  return(.df)
 }
 
 # Function to extract parent term of a GO term
@@ -279,20 +534,46 @@ get_parent <- function(x, y){
   if (length(parents) == 0){
     parents <- x
   } # if the parent term is not in the list, return the term itself
-  if (as.character(parents) %in% c("GO:0003674","GO:0005488")){
-    parents <- x
-  } # if the parent term is molecular function or binding, return the term itself
   return(parents)
 }
 
 # Function to map GO terms to super families
-map_to_super_family <- function(go_term, super_families) {
-  for (super_family in names(super_families)) {
-    if (go_term %in% super_families[[super_family]]) {
-      return(super_family)
-    }
+map_to_super_family <- function(.df, .ref) {
+  tmp <- .df
+  i = 0
+  c = 1
+  while(c < 5 && i < 10){
+    tmp <- tmp %>% 
+      dplyr::group_by(GOID) %>%
+      dplyr::mutate(count = n()) %>%
+      dplyr::ungroup() %>% 
+      dplyr::rowwise() %>% 
+      dplyr::mutate(
+        parent_GO = ifelse(count < 5,  get_parent(GOID, .ref), GOID)) %>% 
+      dplyr::ungroup() %>% 
+      dplyr::mutate(
+        AnnotationDbi::select(GO.db, parent_GO, c("TERM"), "GOID")
+      )
+    i = i + 1
+    print("Iteration: ", i)
+    c <- min(tmp$count)
+    print("Minimum term:", c)
   }
-  return("Other")
+  table <- left_join(.df, tmp[,c("geneID","GOID","TERM")], by = "geneID",
+                     suffix = c("",".parent")) %>% 
+    dplyr::group_by(GOID.parent) %>%
+    dplyr::mutate(count = n()) %>%
+    dplyr::ungroup() %>% 
+    dplyr::rowwise() %>% 
+    dplyr::mutate(
+      TERM.parent = ifelse(count < 5 | TERM.parent == "molecular_function",  "other", TERM.parent)) %>% 
+    dplyr::ungroup() %>% 
+    dplyr::select(!count)
+  
+  table <- table %>% 
+    mutate(TERM.parent = fct_relevel(TERM.parent, "other"))
+  
+  return(table)
 }
 # Function to create visualization for enrichment results
 make_dotplot <- function(mydata, Count, type=c("GO","KEGG")){
@@ -418,41 +699,83 @@ make_GO_simplot <- function(reduced, subset){
            labs (y = "semantic space x", x = "semantic space y"))
 }
 
-make_GObase <- function (terms, genes) {
-  # make sure that the gene symbols are comparable
-  terms$geneID <- toupper(terms$geneID)
-  genes$geneID <- toupper(genes$geneID)
-  # create arrays of involved gene's names for each GO term
-  tgenes <- strsplit(as.vector(terms$geneID), "/")
-  # count the number of genes for each GO term
-  count <- sapply(1:length(tgenes), function(x) length(tgenes[[x]]))
-  # get the logFC values for each gene
-  logFC <- sapply(unlist(tgenes), function(x) {
-    if (!x %in% genes$geneID) {
-      return(0)
-    } else {
-      return(genes$log2FoldChange[match(x, genes$geneID)])
-    }
+compare_GO <- function(.df1, .df2){
+  data <- list()
+  data <- lapply(list(.df1,.df2), function(x){
+    return( x %>% 
+              dplyr::select(!tidyselect::contains("enrichment")) %>%
+              pivot_longer(cols = zscore.2D:Count.Tumor, 
+                           names_pattern = "(.*)\\.(.*)$",names_to = c("measure", "condition"),
+                           values_to = "value") %>%
+              pivot_wider(names_from = measure, values_from = value) %>%
+              dplyr::filter(complete.cases(.) & Type == "Representative") %>% 
+              dplyr::mutate(condition = factor(condition, levels = c("2D", "3D","Tumor"),
+                                               labels = c("Hypoxia (2D)", "Spheroid (3D)","Tumor"))) %>% 
+              dplyr::group_by(condition) %>% 
+              dplyr::arrange(desc(hub_score)) %>%
+              dplyr::slice_head(., n = 7))
   })
-  # make sure that the logFC values are numeric
-  if (class(logFC) == "factor") {
-    logFC <- gsub(",", ".", gsub("\\.", "", logFC))
-    logFC <- as.numeric(logFC)
-  }
-  s <- 1
-  zsc <- c()
-  for (c in 1:length(count)) {
-    value <- 0
-    e <- s + count[c] - 1
-    value <- sapply(logFC[s:e], function(x) ifelse(x > 0, 1, ifelse( x < 0, -1, 0)))
-    # Z-score is the sum of the logFC values divided by the square root of the 
-    # number of genes in the specific GO term
-    zsc <- c(zsc, sum(value)/sqrt(count[c]))
-    s <- e + 1
-  }
-  terms$zscore <- zsc
-  return(terms)
+  
+  size_limits <- range(min(c(data[[1]]$Count, data[[2]]$Count)),
+                       max(c(data[[1]]$Count, data[[2]]$Count)))
+  fill_limits <- range(min(c(data[[1]]$zscore, data[[2]]$zscore)),
+                       max(c(data[[1]]$zscore, data[[2]]$zscore)))
+  
+  p1 <- ggplot(data[[1]], 
+               aes(x = condition, y = Description, fill = zscore, size = Count)) +
+    geom_point(shape = 21, color = "black") + 
+    scale_fill_gradient2(
+        limits = fill_limits,
+        low = "blue", mid = "white", high = "red", midpoint = 0,
+        na.value = "grey50", guide = "colourbar", aesthetics = "fill"
+      ) +
+    scale_size(limits = size_limits,range = c(5,10)) + 
+    guides(size = guide_legend(title = "Gene count", order = 1),
+           fill = guide_colorbar(title = "Activation (z-score)", order = 2)) +
+      scale_y_discrete(labels = function(x) str_wrap(x, width = 50)) + 
+    #facet_grid(Database~., drop = T, scales = "free_y") + 
+    theme_bw() + 
+    theme(legend.position = "right",
+          legend.axis.line = element_line(colour = "#333333", size = 1.5),
+          axis.text.x = element_text(size = 16, angle = 45, hjust = 1),
+          axis.text.y = element_text(size = 16),
+          axis.title = element_blank(),
+          legend.title =  element_text(size = 16),
+          legend.text = element_text(size = 16),
+          plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"))
+  
+  p2 <- ggplot(data[[2]], 
+               aes(x = condition, y = Description, fill = zscore, size = Count)) +
+    geom_point(shape = 21, color = "black") +
+    scale_fill_gradient2(
+        limits = fill_limits,
+        low = "blue", mid = "white", high = "red", midpoint = 0,
+        na.value = "grey50", guide = "colourbar", aesthetics = "fill"
+      ) +
+    scale_size(limits = size_limits,range = c(5,10)) +
+    guides(size = guide_legend(title = "Gene count", order = 1),
+           fill = guide_colorbar(title = "Activation (z-score)", order = 2)) +
+    scale_y_discrete(labels = function(x) str_wrap(x, width = 80)) +
+    #facet_grid(Database~., drop = T, scales = "free_y") +
+    theme_bw() +
+    theme(legend.position = "right",
+          legend.axis.line = element_line(colour = "#333333", size = 1.5),
+          axis.text.x = element_text(size = 16, angle = 45, hjust = 1),
+          axis.text.y = element_text(size = 16),
+          axis.title = element_blank(),
+          legend.title = element_text(size = 16),
+          legend.text = element_text(size = 16),
+          plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"))
+  
+  legend <- get_legend(p1)
+  
+  return(cowplot::plot_grid(
+    p1 + theme(legend.position = "none"),
+    p2 + theme(legend.position = "none"),
+    legend,
+    nrow = 1, ncol = 3, rel_widths = c(1,1,.3), rel_heights = c(1)))
 }
+
 
 # Create a complex plot of all GO categories and KEGG pathways and their activation
 compound_GOplot <-function (data) {
@@ -592,7 +915,7 @@ make_vennbase <- function(set1, set2, set3, names){
   table <- do.call(rbind.fill,rev(list))
   table <- table %>% dplyr::distinct(geneID, .keep_all = T)
   
-  return(list(venn = venn, table = table))
+  return(list(table = table))
 }
 
 make_upsetbase <- function(table, vars){
@@ -609,9 +932,9 @@ make_upsetbase <- function(table, vars){
 }
 # ----------------------- WGCNA analysis functions -----------------------------
 # Function to perform WGCNA analysis
-make_wgcna <- function(deseq, genes, power = 9, initial = TRUE){
+make_wgcna <- function(tpm, genes, power = 9, initial = TRUE){
   # Create a matrix for the WGCNA analysis
-  matrix <- t(assay(vst(deseq[rownames(genes),])))
+  matrix <- t(tpm[rownames(genes),])
   n_genes <- ceiling(ncol(matrix)/1000)*1000
   
   print(paste("Number of genes:", n_genes))
@@ -764,6 +1087,7 @@ make_matrix <- function(mat, filter){
   # Calculate normalized expression values
   mat <- mat - rowMeans(mat)
   mat <- mat[which(row.names(mat) %in% filter),]
+  # mat <- mat[filter,]
   
   return(mat)
   rm(mat)
@@ -771,18 +1095,18 @@ make_matrix <- function(mat, filter){
 
 make_heatmap <- function(deseq, expr, dend, module, filter, coldata){
   # Create a expression matrix for the heatmap
-  matrix <- make_matrix(assay(deseq), 
-                        module[filter, "gene_id"])
+  # matrix <- make_matrix(assay(deseq), 
+  #                      module[filter, "gene_id"])
   # Create annotation for conditions and patients (columns)
-  column.annot <- HeatmapAnnotation(
-    patient = as.factor(coldata[["patient"]]),
-    condition = as.factor(coldata[["condition"]]),
-    show_annotation_name = F,
-    col =list(patient = c("593" = "navy", "673" = "khaki"),
-              condition = c("normoxia.2D" = "steelblue",
-                            "hypoxia.2D" = "salmon",
-                            "physioxia.3D" = "red",
-                            "physioxia.Tumour" = "darkred")))
+  #column.annot <- HeatmapAnnotation(
+  #  patient = as.factor(coldata[["patient"]]),
+  #  condition = as.factor(coldata[["condition"]]),
+  #  show_annotation_name = F,
+  #  col =list(patient = c("593" = "navy", "673" = "khaki"),
+  #            condition = c("normoxia.2D" = "steelblue",
+  #                          "hypoxia.2D" = "salmon",
+  #                          "physioxia.3D" = "red",
+  #                          "physioxia.Tumour" = "darkred")))
   # Create annotation for WGCNA modules and module colors (rows)
   row.annot <- rowAnnotation(
     module = as.factor(module[filter, "colors"]),
@@ -793,30 +1117,29 @@ make_heatmap <- function(deseq, expr, dend, module, filter, coldata){
     show_annotation_name = T, annotation_label = "Module colors", 
     width = unit(1, "in"))
   # Create the normalized expression heat map
-  hm1 <- Heatmap(matrix, name = "Normalized expression",
-                cluster_rows = dend,
-                show_column_dend = T, show_column_names = F,
-                show_row_names = F, show_row_dend = F,
-                cluster_columns = T, 
-                clustering_distance_columns = "spearman",
-                clustering_method_columns = "complete",
-                column_dend_reorder = T,
-                col = colorRamp2(c(min(matrix), 0, max(matrix)), 
-                                 c("green","black","red")),
-                left_annotation = row.annot,
-                bottom_annotation = column.annot)
+  # hm1 <- Heatmap(matrix, name = "Normalized expression",
+  #               cluster_rows = dend,
+  #               show_column_dend = T, show_column_names = F,
+  #               show_row_names = F, show_row_dend = F,
+  #               cluster_columns = T, 
+  #               clustering_distance_columns = "spearman",
+  #               clustering_method_columns = "complete",
+  #               column_dend_reorder = T,
+  #               col = colorRamp2(c(min(matrix), 0, max(matrix)), 
+  #                                c("green","black","red")),
+  #               left_annotation = row.annot,
+  #               bottom_annotation = column.annot)
   # Create the differential expression heat map
-  hm2 <- Heatmap(as.matrix(expr), name = "log2FC",
+  plot <- Heatmap(as.matrix(expr), name = "log2FC",
                  na_col = "white", border = T,
-                 cluster_rows = dend,
-                 cluster_columns = F,
-                 show_column_dend = F, 
-                 column_title = "Expression change",
-                 show_column_names = T, show_row_names = F)
+                 cluster_rows = dend, column_dend_reorder = T,
+                 show_column_dend = F, column_title = "Expression change",
+                 show_column_names = T, show_row_names = F,
+                 left_annotation = row.annot)
   # Merge the heat maps
-  plot <- draw(hm1 + hm2, merge_legend = T, padding = unit(c(15, 2, 2, 2), "mm"))
+  # plot <- draw(hm1 + hm2, merge_legend = T, padding = unit(c(15, 2, 2, 2), "mm"))
   
-  return(list(matrix = matrix, plot = plot))
+  return(list(plot = plot))
 }
 
 
