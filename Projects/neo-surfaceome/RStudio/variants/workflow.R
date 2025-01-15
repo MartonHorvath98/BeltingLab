@@ -92,6 +92,12 @@ vcf.filtered.673 <- vcf.table %>%
 vcf.filtered.593 <- lapply(vcf.filtered.593, filter_vcf, VI_3429_593_somatic, SURFME_filter)
 vcf.filtered.673 <- lapply(vcf.filtered.673, filter_vcf, VI_3429_673_somatic, SURFME_filter)
 
+vcf.filter.summary.593 <- lapply(vcf.filtered.593, function(x){
+  lapply(x, function(y){
+    return(summarise_vcf(y, conv, conv.class)$res)})
+})
+
+
 # 4.) Calculate the number of variants after every filtering step
 variant_num <- data.frame(
   "total" = c(sapply(vcf.filtered.593, function(x) {x[["df"]] %>% dplyr::pull(variant_ID) %>% unique() %>% length()}),
@@ -337,3 +343,5 @@ png(file.path(date, plots_dir, "SLC12A4.png"), width = 12, height = 5,
 lollipopPlot(data = SLC12A4, gene = "SLC12A4",
              refSeqID = "NM_001145961", proteinID = "NP_001139433")
 dev.off()
+
+

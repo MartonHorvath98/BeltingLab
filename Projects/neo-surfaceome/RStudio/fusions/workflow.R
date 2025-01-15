@@ -96,21 +96,43 @@ fusion.breakpoints <- lapply(fusion.breakpoints, function(x){
 
 
 library(vcfR)
+vcf.593 <- read.vcfR(file.path("A:/GBM/RStudio/Fusions/data/VI-3430-593-tumor-tissue_Manta.vcf"))
 vcf.673 <- read.vcfR(file.path("A:/GBM/RStudio/Fusions/data/VI-3430-673-tumor-tissue_Manta.vcf"))
 
-sv_data <- vcf.673@fix %>% 
+# -------------- Patient 1 ---------------------------------------------------- #
+sv_data.593 <- vcf.593@fix %>% 
   as.data.frame() %>%
   dplyr::select(CHROM, POS, INFO)
-sv_data <- sv_data %>%
+sv_data.593 <- sv_data.593 %>%
   mutate(
     SVTYPE = gsub(".*SVTYPE=([A-Z]+);.*", "\\1", INFO),
     END = as.numeric(gsub(".*END=([0-9]+);.*", "\\1", INFO)),
     CHROM = as.character(CHROM)
   )
 
-circos_data <- sv_data %>%
-  filter(!is.na(SVTYPE) & !is.na(END) & 
-           CHROM %in% paste0("chr", c(1,2,3,5,6,7,9,12,13,14,19,"X"))) %>%
+circos_data.593 <- sv_data.593 %>%
+  filter(!is.na(SVTYPE) & !is.na(END)) %>% # & 
+         #  CHROM %in% paste0("chr", c(1,2,3,5,6,7,9,12,13,14,19,"X"))) %>%
+  dplyr::select(CHROM, POS, END, SVTYPE) %>% 
+  dplyr::mutate(CHROM = as.factor(CHROM),
+                POS = as.numeric(POS),
+                END = as.numeric(END),
+                SVTYPE = as.factor(SVTYPE))
+
+# -------------- Patient 2 ---------------------------------------------------- #
+sv_data.673 <- vcf.673@fix %>% 
+  as.data.frame() %>%
+  dplyr::select(CHROM, POS, INFO)
+sv_data.673 <- sv_data.673 %>%
+  mutate(
+    SVTYPE = gsub(".*SVTYPE=([A-Z]+);.*", "\\1", INFO),
+    END = as.numeric(gsub(".*END=([0-9]+);.*", "\\1", INFO)),
+    CHROM = as.character(CHROM)
+  )
+
+circos_data.673 <- sv_data.673 %>%
+  filter(!is.na(SVTYPE) & !is.na(END)) %>% # & 
+          # CHROM %in% paste0("chr", c(1,2,3,5,6,7,9,12,13,14,19,"X"))) %>%
   dplyr::select(CHROM, POS, END, SVTYPE) %>% 
   dplyr::mutate(CHROM = as.factor(CHROM),
                 POS = as.numeric(POS),
@@ -123,9 +145,10 @@ svg(file.path(date, plots_dir, "circos_SV_593.svg"), width = 10, height = 10)
 circos.initializeWithIdeogram(plotType = c("axis", "labels"))
 text(0, 0, "Patient 1", cex = 2)
 circos.genomicLink(
-  region1 = circos_data[, c("CHROM", "POS", "POS")],
-  region2 = circos_data[, c("CHROM", "END", "END")],
-  col = ifelse(circos_data$SVTYPE == "DUP", "steelblue", ifelse(circos_data$SVTYPE == "DEL", "violet", "salmon")),
+  region1 = circos_data.593[, c("CHROM", "POS", "POS")],
+  region2 = circos_data.593[, c("CHROM", "END", "END")],
+  col = ifelse(circos_data.593$SVTYPE == "DUP", "steelblue", 
+               ifelse(circos_data.593$SVTYPE == "DEL", "violet", "salmon")),
   border = NA, h = 1
 )
 circos.genomicLink(

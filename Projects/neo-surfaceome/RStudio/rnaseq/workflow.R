@@ -624,3 +624,27 @@ surfme_unchanged_df <- surfme_unchanged_df %>%
 
 write.xlsx(surfme_unchanged_df, file.path(date, results_dir, "unchanged_surfme.xlsx"))
 
+
+
+# Load proteomics results
+imputed_proteomics <- readxl::read_excel(file.path("data", "WTF2imputed.xlsx"))
+proteomics_IDs <- imputed_proteomics[,c("Accession","Gene Symbol")]
+proteomics_IDs <- setNames(proteomics_IDs, c("UniprotID","geneID"))
+
+proteomics_matrix <- imputed_proteomics %>% 
+  dplyr::select(-c(1:4)) %>% 
+  dplyr::select(contains(c("2D Normoxia","3D","Tumor"))) %>% 
+  dplyr::select(contains(c("593","673"))) %>% 
+  dplyr::select(contains(c("Surface"))) %>% 
+  setNames(., c("593_2D","593_3D","593_Tumor","673_2D","673_3D","673_Tumor")) %>% 
+  as.matrix()
+
+rownames(proteomics_matrix) <- proteomics_IDs$UniprotID
+proteomics_matrix <- proteomics_matrix[which(complete.cases(proteomics_matrix)),]
+
+proteomics_IDs <- proteomics_IDs[which(proteomics_IDs$UniprotID %in% 
+                                         surfme$UniprotID),]
+
+protein_surfme <- proteomics_matrix[which(rownames(proteomics_matrix) %in% 
+                                           proteomics_IDs$UniprotID),]
+protein_surfme <- normalize.quantiles(protein_surfme, keep.names = T)

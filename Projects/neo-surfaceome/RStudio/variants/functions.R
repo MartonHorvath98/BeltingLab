@@ -97,7 +97,7 @@ plot_summary <- function(df){
   
   
   p1 <- ggplot(df_1, aes(x = class.con, y = fract)) +
-    geom_point(fill = "grey", color = "black", shape = 21, size = 3, alpha = .5, 
+    geom_point(aes(fill = class.con), color = "black", shape = 21, size = 3, alpha = .5, 
                position = position_jitter(width = 0.5),
                show.legend = F) +
     geom_boxplot(aes(fill = class.con), linewidth = 1, alpha = 0.5) + 
@@ -139,9 +139,9 @@ plot_summary <- function(df){
   legend <- get_legend(p3)
   
   # combine plots
-  grid1 <- cowplot::plot_grid(p1, p2, ncol = 2, rel_widths = c(2,1), align = "hv")
+  grid1 <- cowplot::plot_grid(p1, p2, ncol = 2, rel_widths = c(2,1))#, align = "hv")
   grid2 <- cowplot::plot_grid(grid1, p3 + theme(legend.position = "none"),
-                              nrow = 2, rel_heights = c(1.5, 1), align = "v")
+                              nrow = 2, rel_heights = c(1.5, 1))#, align = "v")
   full.grid <- cowplot::plot_grid(grid2, legend, ncol = 2, rel_widths = c(1, 0.2))
   
   return(full.grid)
