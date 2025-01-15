@@ -33,3 +33,6 @@ refs/
 
 # Report
 *.pptx
+
+# Log builder script
+log-builder.sh
