@@ -26,11 +26,11 @@ normalizeTranscript <- function(.data, .db){
 
 # II.) Remove duplicates
 # Remove duplicate symbols based on lgFC
-removeDuplicates <- function(.data, .column){
+removeDuplicates <- function(.data, .column, .symbol){
   # Sort the data frame based on the log2FC values
   data <- .data[order(abs(.data[[.column]]), decreasing = TRUE),]
   # Remove duplicates
-  data <- data[!duplicated(data$SYMBOL),]
+  data <- data[!duplicated(.data[[.symbol]]),]
   return(data)
 
 }
@@ -54,89 +54,17 @@ limmaDEA <- function(.data, .design, .contrast){
   
   # Fit the contrasts
   
-  contrast <- makeContrasts(contrasts = .contrast, levels = design)
-  fit2 <- contrasts.fit(fit, contrast)
+  contrast.matrix <- makeContrasts(contrasts = .contrast, levels = design)
+  fit2 <- contrasts.fit(fit, contrast.matrix)
   fit2 <- eBayes(fit2)
   
   # Make deg table with getfitlimma
-  res <- decideTests(fit2, method="global", adjust.method="BH", p.value=0.05)
-  degs <- topTable(fit2, number = "Inf")
-  return(degs)
-}
-
-# IV.) Create DEG table
-getFitLimma<-function (fit, results = NULL, digits = 3, adjust = "BH", method = "separate", 
-                       F.adjust = "BH", scientificFormat=TRUE, sortByF=FALSE, filterByResults=FALSE,
-                       ...) {
-  if (!is(fit, "MArrayLM")) 
-    stop("fit should be an MArrayLM object")
-  if (!is.null(results) && !is(results, "TestResults")) 
-    stop("results should be a TestResults object")
-  if (is.null(fit$t) || is.null(fit$p.value)) 
-    stop("results should include eBayes correction")
-  method <- match.arg(method, c("separate", "global"))
-  if(is.null(results))filterByResults=FALSE
-  p.value <- as.matrix(fit$p.value)
-  if (adjust == "none") {
-    p.value.adj <- NULL
-  } else {
-    if (method == "separate"){
-      p.value.adj <- p.value
-      for (j in 1:ncol(p.value)) p.value.adj[, j] <- p.adjust(p.value[, j], method = adjust) 
-    } else if (method == "global") {
-      p.value.adj <- array(p.adjust(p.value, method = adjust),dim=dim(p.value))
-      rownames(p.value.adj)<-rownames(p.value)
-      colnames(p.value.adj)<-colnames(p.value)
-    }
+  res <- list()
+  for (i in 1:ncol(contrast.matrix)){
+    res[[i]] <- topTable(fit2, coef = i, number = Inf)
   }
-  if (F.adjust == "none" || is.null(fit$F.p.value)){
-    F.p.value.adj <- NULL 
-  } else {
-    F.p.value.adj <- p.adjust(fit$F.p.value, method = F.adjust)
-  }
-  rn <- function(x, digits = digits, fr=round){
-    if (is.null(x)){
-      NULL
-    } else {
-      if (is.matrix(x) && ncol(x) == 1) x <- x[, 1]
-      fr(x, digits = digits)
-    }
-  }
-  if(scientificFormat){
-    fr <- function (x, digits = 3, ...) {
-      x <- signif(x, digits)
-      format(x, trim = TRUE, scientific = TRUE, ...)
-    }
-    dg1 <- digits
-    dg2 <- digits
-  } else {
-    fr <- round
-    dg1 <- digits + 2
-    dg2 <- digits + 3
-  }
-  tab <- list()
-  tab$Genes <- fit$genes
-  tab$logFC <- rn(fit$coef, digits = digits)
-  tab$Pv <- rn(p.value, digits = dg1, fr=fr)
-  tab$PvAdj <- rn(p.value.adj, digits = dg2, fr=fr)
-  # tab$F <- rn(fit$F, digits = digits)
-  # tab$F.Pv <- rn(fit$F.p.value, digits = dg1, fr=fr)
-  # tab$F.PvAdj <- tab$F.PvAdj <- rn(F.p.value.adj, digits=dg2, fr=fr)
-  if(!is.null(results)){
-    results<-unclass(results)
-    junk<-sapply(colnames(results),function(nm){
-      tab[[nm]]<<-results[,nm, drop=FALSE]
-    })
-  }
-  tab <- data.frame(tab, check.names=FALSE, stringsAsFactors=FALSE)
-  if(sortByF)tab<-tab[sort.list(fit$F.p.value),]
-  colnames(tab)<-sub(" - ","-",colnames(tab))
-  if(!is.null(colnames(fit$genes)))colnames(tab)[1:ncol(fit$genes)]<-colnames(fit$genes)
-  if(filterByResults){
-    signames<-rownames(results[rowSums(abs(results))>0, , drop=FALSE])
-    tab<-tab[rownames(tab)%in%signames,]
-  }
-  return(tab)
+  
+  return(res)
 }
 
 # ---------------------------------------------------------------------- #
@@ -181,16 +109,15 @@ plot_pca <- function(data, .groups, .labels, .values,
 # ---------------------------------------------------------------------- #
 
 # I.) SET SIGNIFICANCE LEVELS
-get_significance <- function(.list){
-  lapply(.list, function(x) {
-    return(x %>% 
+get_significance <- function(.df){
+  return(.df %>% 
              # Rename data frame columns to make sense
-             setNames(., c("symbol", "log2FoldChange", "pvalue", "padj")) %>% 
+             # setNames(., c("symbol", "log2FoldChange", "pvalue", "padj")) %>% 
              # Add a columns...
              dplyr::mutate(
                # ... for ENTREZ gene identifiers, for downstream analyses
-               entrezID = mapIds(org.Hs.eg.db, symbol, keytype = "SYMBOL", 
-                                 column = "ENTREZID"),
+               # entrezID = mapIds(org.Hs.eg.db, symbol, keytype = "SYMBOL", 
+               #                   column = "ENTREZID"),
                # ... for significance levels using the thresholds:
                #                            p-adj < 0.05, abs(log2FC) > 0.5
                significance = dplyr::case_when(
@@ -200,7 +127,6 @@ get_significance <- function(.list){
                  log2FoldChange > 0.5 & padj < 0.05 ~ 'Signif. up-regulated',
                  T ~ 'NS')) %>% 
              dplyr::filter(complete.cases(.)))
-  })
 }
 
 plot_vulcan <- function(.data){
@@ -229,7 +155,7 @@ plot_vulcan <- function(.data){
                 show.legend = F, check_overlap = T,
                 label = subset(.data,
                                significance %in% c("Signif. up-regulated", 
-                                                   "Signif. down-regulated"))[,"symbol"])
+                                                   "Signif. down-regulated"))[,"Symbol"])
     + theme(axis.title = element_text(size = 14), 
             axis.text = element_text(size = 14), 
             legend.position = 'none'))
@@ -253,13 +179,13 @@ get_regions <- function(.list, .names){
   tmp <- list(
     .list[[1]] %>% 
       dplyr::filter(significance %in% c("Signif. up-regulated","Signif. down-regulated")) %>% 
-      dplyr::select(c("symbol","log2FoldChange")),
+      dplyr::select(c("Symbol","log2FoldChange")),
     .list[[2]] %>% 
       dplyr::filter(significance %in% c("Signif. up-regulated","Signif. down-regulated")) %>% 
-      dplyr::select(c("symbol","log2FoldChange")),
+      dplyr::select(c("Symbol","log2FoldChange")),
     .list[[3]] %>% 
       dplyr::filter(significance %in% c("Signif. up-regulated","Signif. down-regulated")) %>% 
-      dplyr::select(c("symbol","log2FoldChange"))
+      dplyr::select(c("Symbol","log2FoldChange"))
   )
   names(tmp) <- names(.list)
   
@@ -353,21 +279,18 @@ plot_venn <- function(.data, .sets, .labels){
 # ---------------------------------------------------------------------- #
 
 # I. EXTRACT GENE LISTS
-get_genelist <- function(.df, .filter){
-  
+get_genelist <- function(.df, .filter, .value, .name){
   # Extract the background gene list of every expressed gene
   background <- .df %>%
-    dplyr::mutate(effect_size=-log10(padj)*log2FoldChange) %>% 
-    dplyr::arrange(desc(effect_size)) %>%
     dplyr::distinct(entrezID, .keep_all = T) %>%
-    dplyr::pull("effect_size", name ="entrezID")
+    dplyr::pull(.value, name = .name) %>% 
+    sort(., decreasing = T)
   # Extract the gene list of interest of DEGs
   interest <- .df %>%
-    dplyr::mutate(effect_size=-log10(padj)*log2FoldChange) %>% 
     dplyr::filter(.filter) %>%
-    dplyr::arrange(desc(effect_size)) %>%
     dplyr::distinct(entrezID, .keep_all = T) %>%
-    dplyr::pull("effect_size", name ="entrezID")
+    dplyr::pull(.value, name = .name) %>% 
+    sort(., decreasing = T)
   
   return(list(background = background, interest = interest))
 }
@@ -443,9 +366,6 @@ run_gsea <- function(.geneset, .terms){
   return(list("gsea" = res))
 }
 
-
-
-
 extract_gsea_results <- function(.gsea, .db){
   .db <- .db %>% 
     dplyr::select(gs_name, gs_exact_source, gs_description) %>% 
@@ -511,4 +431,109 @@ arrange_regions <- function(set1, set2, set3, set4, names){
     dplyr::pull(Size, name = Regions)
   
   return(list(table = table, regions = regions)) 
+}
+
+# VI. PLOT GSEA RESULTS
+# extract detailed enrichment statistics for a single term
+gsInfo <- function (object, geneSetID) {
+  geneList <- object@geneList
+  if (is.numeric(geneSetID)) 
+    geneSetID <- object@result[geneSetID, "ID"]
+  geneSet <- object@geneSets[[geneSetID]]
+  exponent <- object@params[["exponent"]]
+  df <- gseaScores(geneList, geneSet, exponent, fortify = TRUE)
+  df$ymin <- 0
+  df$ymax <- 0
+  pos <- df$position == 1
+  h <- diff(range(df$runningScore))/20
+  df$ymin[pos] <- -h
+  df$ymax[pos] <- h
+  df$geneList <- geneList
+  if (length(object@gene2Symbol) == 0) {
+    df$gene <- names(geneList)
+  }
+  else {
+    df$gene <- object@gene2Symbol[names(geneList)]
+  }
+  df$Description <- object@result[geneSetID, "Description"]
+  return(df)
+}
+
+gseaScores <- function (geneList, geneSet, exponent = 1, fortify = FALSE) 
+{
+  geneSet <- intersect(geneSet, names(geneList))
+  N <- length(geneList)
+  Nh <- length(geneSet)
+  Phit <- Pmiss <- numeric(N)
+  hits <- names(geneList) %in% geneSet
+  Phit[hits] <- abs(geneList[hits])^exponent
+  NR <- sum(Phit)
+  Phit <- cumsum(Phit/NR)
+  Pmiss[!hits] <- 1/(N - Nh)
+  Pmiss <- cumsum(Pmiss)
+  runningES <- Phit - Pmiss
+  max.ES <- max(runningES)
+  min.ES <- min(runningES)
+  if (abs(max.ES) > abs(min.ES)) {
+    ES <- max.ES
+  }
+  else {
+    ES <- min.ES
+  }
+  df <- data.frame(x = seq_along(runningES), runningScore = runningES, 
+                   position = as.integer(hits))
+  if (fortify == TRUE) {
+    return(df)
+  }
+  df$gene = names(geneList)
+  res <- list(ES = ES, runningES = df)
+  return(res)
+}
+
+# Plot running score for selected gene sets
+plotRunningScore <- function(.df, .x, .y, .color, .palette){
+  subset <- subset(.df, position == 1)
+  
+  return(ggplot(.df, aes(x = .df[[.x]])) 
+         + xlab(element_blank()) 
+         + ylab("Enrichment score (ES)") 
+         + theme_bw(base_size = 14) 
+         + geom_hline(yintercept = 0, linetype = "dashed", color = "grey")
+         + scale_x_continuous(expand = c(0, 0)) 
+         + scale_y_continuous(expand = c(0.01, 0.01), 
+                              breaks = c(-0.1, 0, 0.1, 0.2, 0.3, 0.4, 0.5))
+         + geom_point(aes(x = .data[[.x]], y = .data[[.y]], color = .data[[.color]]), show.legend = F,
+                      size = 2, data = subset)
+         + scale_color_manual(values = .palette)
+         + theme(panel.grid.major = element_blank(), 
+                 panel.grid.minor = element_blank(),
+                 panel.grid.major.y = element_blank(), 
+                 panel.grid.minor.y = element_blank(),
+                 axis.text.x = element_blank(), 
+                 axis.ticks.x = element_blank(),
+                 axis.text.y = element_text(colour = "black", size = 14))
+         )
+}
+
+plotGeneRank <- function(.df, .x, .color, .palette){
+  subset <- subset(.df, position == 1)
+  
+  return(ggplot(.df, aes(x = .df[[.x]])) 
+         + geom_linerange(aes(ymin = ymin, ymax = ymax, color = .data[[.color]]), 
+                          show.legend = F, size = 1, data = subset) 
+         + theme_bw(base_size = 14) 
+         + xlab("Rank in ordered gene list") 
+         + scale_x_continuous(expand = c(0, 0)) 
+         + scale_y_continuous(expand = c(0, 0)) 
+         + scale_color_manual(values = .palette) 
+         + facet_grid(.df[[.color]]~., scales = "free_y") 
+         + theme(panel.grid.major = element_blank(), 
+                 panel.grid.minor = element_blank(), 
+                 panel.grid.major.y = element_blank(),
+                 panel.grid.minor.y = element_blank(), 
+                 axis.ticks.y = element_blank(), 
+                 axis.text.y = element_blank(),
+                 strip.text = element_blank(), 
+                 axis.text.x = element_text(colour = "black", size = 14))
+  )
 }

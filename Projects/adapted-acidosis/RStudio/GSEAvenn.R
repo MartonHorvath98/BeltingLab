@@ -2,173 +2,173 @@
 # 1.) The comparison of the 3 Uppsala cell lines HGCC)                         #
 ################################################################################
 # 1. Load the GSEA results for the 3 cell lines
-tmp <- list(HGCC.GSEA$U3017$sig_df[,c("ID", "NES","p.adjust")],
-            HGCC.GSEA$U3047$sig_df[,c("ID", "NES", "p.adjust")],
-            HGCC.GSEA$U3054$sig_df[,c("ID", "NES", "p.adjust")])
-names(tmp) <- names(HGCC.GSEA)
-
-# Extract the number of genes in each region of the Venn diagram
-sets <- GOVenn(HGCC.GSEA$U3017$sig_df[,c("ID", "NES","p.adjust")],
-               HGCC.GSEA$U3047$sig_df[,c("ID", "NES","p.adjust")],
-               HGCC.GSEA$U3054$sig_df[,c("ID", "NES","p.adjust")],
-               plot = F)$table
-sets <- lapply(sets, rownames_to_column, var = "ID")
-sets[["A_only"]] <- sets[["A_only"]] %>% dplyr::rename(logFC_A = logFC)
-sets[["B_only"]] <- sets[["B_only"]] %>% dplyr::rename(logFC_B = logFC)
-sets[["C_only"]] <- sets[["C_only"]] %>% dplyr::rename(logFC_C = logFC)
-
-# Create a data frame for the Venn diagram
-table <- do.call(rbind.fill,rev(sets))
-table <- table %>% dplyr::distinct(ID, .keep_all = T)
-
-# Create an upset plot base: change log2FC values to logical (TRUE/FALSE)
-table <- table %>%
-  dplyr::mutate("U3017" = ifelse(is.na(logFC_A), FALSE, TRUE)) %>%
-  dplyr::mutate("U3047" = ifelse(is.na(logFC_B), FALSE, TRUE)) %>%
-  dplyr::mutate("U3054" = ifelse(is.na(logFC_C), FALSE, TRUE)) %>%
-  dplyr::relocate(where(is.logical), .before = where(is.character))
-colnames(table)[5:7] = c("NES_U3017", "NES_U3047", "NES_U3054")
-
-# get the genes in each of the regions
-arranged <- arrange_venn(table, c("U3017","U3047","U3054"), radius = 2, max_iterations = 500,
-                         extract_regions = T)
-# arranged_df <- arrange_venn(table, c("U3017","U3047","U3054"),
-#                             extract_regions = F, radius = 2, max_iterations = 1000)
-set.seed(123)
-# randomize the position of the genes in the regions
-xy = rbind(
-  calculateCircle(x = 0.00, y = 0.2886, r = 0.1, # 3-way intersection
-                  noiseFun = function(x) (x + rnorm(1,0,0.1)), # add noise
-                  steps = 54,randomDist = T, randomFun = rnorm), # 579 genes
-  calculateEllipse(x = -0.65, y = -0.0866, a = 0.2, b = .2, angle = -240, 
-                   noiseFun = function(x) (x + rnorm(1,0,0.1)),
-                   steps = 22, randomDist = T, randomFun = rnorm),
-  calculateEllipse(x = 0.65, y = -0.0866, a = 0.2, b = .2, angle = -120, 
-                   noiseFun = function(x) (x + rnorm(1,0,0.1)),
-                   steps = 68, randomDist = T, randomFun = rnorm),
-  calculateEllipse(x = 0, y = 1.0392, a = 0.1, b = .2, angle = 0, 
-                   noiseFun = function(x) (x + rnorm(1,0,0.1)),
-                   steps = 17, randomDist = T, randomFun = rnorm),
-  calculateCircle(x = 0.00, y = -1.2124, r = .3, 
-                  noiseFun = function(x) (x + rnorm(1,0,0.2)),
-                  steps = 131, randomDist = T, randomFun = rnorm),
-  calculateCircle(x = 1.30, y = 1.0392, r = .3,  
-                  noiseFun = function(x) (x + rnorm(1,0,0.2)),
-                  steps = 29,randomDist = T, randomFun = rnorm),
-  calculateCircle(x = -1.30, y = 1.0392, r = .3, 
-                  noiseFun = function(x) (x + rnorm(1,0,0.2)),
-                  steps = 62,randomDist = T, randomFun = rnorm)
-)
-
-table <- table %>%
-  dplyr::mutate(region = dplyr::case_when(
-    `U3017` & `U3047` & `U3054` ~ "U3017-U3047-U3054",
-    `U3017` & !`U3047` & `U3054` ~ "U3017-U3054",
-    !`U3017` & `U3047` & `U3054` ~ "U3047-U3054",
-    `U3017` & `U3047` & !`U3054` ~ "U3017-U3047",
-    !`U3017` & !`U3047` & `U3054` ~ "U3054",
-    !`U3017` & `U3047` & !`U3054` ~ "U3047",
-    `U3017` & !`U3047` & !`U3054` ~ "U3017"
-  ), # relabel the regions
-  region = as.factor(region),
-  x = xy[,1],
-  y = xy[,2],
-  )
-
-# 2. Create a Venn diagram of the GSEA results
-HGCC_GSEA_venn <- list()
-(HGCC_GSEA_venn$plot <- ggplot(table)
- # --- BASE PLOT & LEGEND--- #
- # create the base plot with 1:1 aspect ratio and clear whit background
- + coord_fixed()
- + theme_void()
- # Add invisible gene sets to be able to add the legend to the plot
- + geom_point(aes(x = x, y = y, colour = Trend), 
-              alpha = 0.01, size = 1)
- + scale_color_manual(
-   labels = c("Opposing regulation","Inhibited","Activated"),
-   values = c("Change" = "orange", "DOWN" = "blue", "UP" = "darkred"),
-   guide = guide_legend(override.aes = c(alpha = 1, size = 5)),
-   aesthetics = "colour",
- ) 
- # --- SETS: BORDERS, FILL, LABELS --- #
- # Add the set borders of the Venn diagram
- + geom_venn_region(table, sets = c("U3017","U3047","U3054"), 
-                    alpha = 0.3, show.legend = F) 
- + geom_venn_circle(table, sets = c("U3017","U3047","U3054"),
-                    size = .5)
- # Fill every set white
- + scale_fill_venn_mix(table, sets =  c("U3017","U3047","U3054"),
-                       guide='none', highlight = c("U3017-U3047-U3054"),
-                       inactive_color='NA', active_color = 'NA')
- # Add the names of the sets
- + geom_venn_label_set(table, outwards_adjust = 2,
-                       sets = c("U3017","U3047","U3054"),
-                       fill = alpha("black", .35), 
-                       aes(label =  c("U3054","U3047","U3017")))
- # --- DECORATE SETS; GENE EXPRESSION TRENDS --- #
- # add labels with numbers of incoherently activated genes
- + geom_venn_label_region(
-   table %>% dplyr::filter(Trend == "Change"),
-   sets = c("U3017","U3047","U3054"),
-   aes(label=size ), fill = alpha("orange", .35),
-   outwards_adjust=1.25, position=position_nudge(y=0.15))
- # add the numbers of up-regulated genes
- + geom_venn_label_region(
-   table %>% dplyr::filter(Trend == "UP"),
-   sets = c("U3017","U3047","U3054"),
-   aes(label=size ), fill = alpha("darkred", .35),
-   outwards_adjust=1.25, position=position_nudge(y=-0.15, x = 0.2))
- # add the numbers of down-regulated genes
- + geom_venn_label_region(
-   table %>% dplyr::filter(Trend == "DOWN"),
-   sets = c("U3017","U3047","U3054"),
-   aes(label=size), fill = alpha("blue", .35),
-   outwards_adjust=1.25, position=position_nudge(y=-0.15, x = -0.2)) 
- # --- SET THE THEME --- #
- + theme(
-   legend.title = element_text(size = 12),
-   legend.text = element_text(size = 12)))
-
-# Save the plot
-results_dir <- "Results/HGCC"
-ggsave(file.path(wd, results_dir, "HGCC_GSEA_venn.png"), bg = "white", 
-       plot = HGCC_GSEA_venn$plot, width = 12, height = 8)
-
-# 3. Extract the genes in each region of the Venn diagram
-tmp <- merge.rec(tmp, by = "ID", all = T, suffixes = c("", ""))
-colnames(tmp) <- c("ID", "NES (U3017)", "p.adjust (U3017)", 
-                   "NES (U3047)", "p.adjust (U3047)", "NES (U3054)", "p.adjust (U3054)")
-
-HGCC_GSEA_venn$table <- table %>% 
-  dplyr::select(ID, Trend, region) %>% 
-  dplyr::inner_join(tmp, by = "ID") %>% 
-  dplyr::mutate(Trend = dplyr::case_when(
-    Trend == "Change" ~ "Opposing regulation",
-    Trend == "UP" ~ "Activated",
-    Trend == "DOWN" ~ "Inhibited"
-  ),
-  Description = pathways$gs_description[match(ID, pathways$gs_exact_source)]) %>% 
-  dplyr::relocate(Description, .after = ID)
-
-HGCC_GSEA_venn$table <- HGCC_GSEA_venn$table %>% 
-  dplyr::group_split(region, .keep = T)
-
-HGCC_GSEA_venn$table <- setNames(HGCC_GSEA_venn$table, c("U3017","U3017-U3047","U3017-U3047-U3054", "U3017-U3054",
-                                 "U3047","U3047-U3054","U3054"))
-
-# Save the table
-sapply(names(HGCC_GSEA_venn$table), function(x){
-  openxlsx::write.xlsx(HGCC_GSEA_venn$table[[x]], 
-                       file.path(results_dir, paste0("HGCC_GSEA_venn_", x, ".xlsx")))
-})
+# tmp <- list(HGCC.GSEA$U3017$sig_df[,c("ID", "NES","p.adjust")],
+#             HGCC.GSEA$U3047$sig_df[,c("ID", "NES", "p.adjust")],
+#             HGCC.GSEA$U3054$sig_df[,c("ID", "NES", "p.adjust")])
+# names(tmp) <- names(HGCC.GSEA)
+# 
+# # Extract the number of genes in each region of the Venn diagram
+# sets <- GOVenn(HGCC.GSEA$U3017$sig_df[,c("ID", "NES","p.adjust")],
+#                HGCC.GSEA$U3047$sig_df[,c("ID", "NES","p.adjust")],
+#                HGCC.GSEA$U3054$sig_df[,c("ID", "NES","p.adjust")],
+#                plot = F)$table
+# sets <- lapply(sets, rownames_to_column, var = "ID")
+# sets[["A_only"]] <- sets[["A_only"]] %>% dplyr::rename(logFC_A = logFC)
+# sets[["B_only"]] <- sets[["B_only"]] %>% dplyr::rename(logFC_B = logFC)
+# sets[["C_only"]] <- sets[["C_only"]] %>% dplyr::rename(logFC_C = logFC)
+# 
+# # Create a data frame for the Venn diagram
+# table <- do.call(rbind.fill,rev(sets))
+# table <- table %>% dplyr::distinct(ID, .keep_all = T)
+# 
+# # Create an upset plot base: change log2FC values to logical (TRUE/FALSE)
+# table <- table %>%
+#   dplyr::mutate("U3017" = ifelse(is.na(logFC_A), FALSE, TRUE)) %>%
+#   dplyr::mutate("U3047" = ifelse(is.na(logFC_B), FALSE, TRUE)) %>%
+#   dplyr::mutate("U3054" = ifelse(is.na(logFC_C), FALSE, TRUE)) %>%
+#   dplyr::relocate(where(is.logical), .before = where(is.character))
+# colnames(table)[5:7] = c("NES_U3017", "NES_U3047", "NES_U3054")
+# 
+# # get the genes in each of the regions
+# arranged <- arrange_venn(table, c("U3017","U3047","U3054"), radius = 2, max_iterations = 500,
+#                          extract_regions = T)
+# # arranged_df <- arrange_venn(table, c("U3017","U3047","U3054"),
+# #                             extract_regions = F, radius = 2, max_iterations = 1000)
+# set.seed(123)
+# # randomize the position of the genes in the regions
+# xy = rbind(
+#   calculateCircle(x = 0.00, y = 0.2886, r = 0.1, # 3-way intersection
+#                   noiseFun = function(x) (x + rnorm(1,0,0.1)), # add noise
+#                   steps = 54,randomDist = T, randomFun = rnorm), # 579 genes
+#   calculateEllipse(x = -0.65, y = -0.0866, a = 0.2, b = .2, angle = -240, 
+#                    noiseFun = function(x) (x + rnorm(1,0,0.1)),
+#                    steps = 22, randomDist = T, randomFun = rnorm),
+#   calculateEllipse(x = 0.65, y = -0.0866, a = 0.2, b = .2, angle = -120, 
+#                    noiseFun = function(x) (x + rnorm(1,0,0.1)),
+#                    steps = 68, randomDist = T, randomFun = rnorm),
+#   calculateEllipse(x = 0, y = 1.0392, a = 0.1, b = .2, angle = 0, 
+#                    noiseFun = function(x) (x + rnorm(1,0,0.1)),
+#                    steps = 17, randomDist = T, randomFun = rnorm),
+#   calculateCircle(x = 0.00, y = -1.2124, r = .3, 
+#                   noiseFun = function(x) (x + rnorm(1,0,0.2)),
+#                   steps = 131, randomDist = T, randomFun = rnorm),
+#   calculateCircle(x = 1.30, y = 1.0392, r = .3,  
+#                   noiseFun = function(x) (x + rnorm(1,0,0.2)),
+#                   steps = 29,randomDist = T, randomFun = rnorm),
+#   calculateCircle(x = -1.30, y = 1.0392, r = .3, 
+#                   noiseFun = function(x) (x + rnorm(1,0,0.2)),
+#                   steps = 62,randomDist = T, randomFun = rnorm)
+# )
+# 
+# table <- table %>%
+#   dplyr::mutate(region = dplyr::case_when(
+#     `U3017` & `U3047` & `U3054` ~ "U3017-U3047-U3054",
+#     `U3017` & !`U3047` & `U3054` ~ "U3017-U3054",
+#     !`U3017` & `U3047` & `U3054` ~ "U3047-U3054",
+#     `U3017` & `U3047` & !`U3054` ~ "U3017-U3047",
+#     !`U3017` & !`U3047` & `U3054` ~ "U3054",
+#     !`U3017` & `U3047` & !`U3054` ~ "U3047",
+#     `U3017` & !`U3047` & !`U3054` ~ "U3017"
+#   ), # relabel the regions
+#   region = as.factor(region),
+#   x = xy[,1],
+#   y = xy[,2],
+#   )
+# 
+# # 2. Create a Venn diagram of the GSEA results
+# HGCC_GSEA_venn <- list()
+# (HGCC_GSEA_venn$plot <- ggplot(table)
+#  # --- BASE PLOT & LEGEND--- #
+#  # create the base plot with 1:1 aspect ratio and clear whit background
+#  + coord_fixed()
+#  + theme_void()
+#  # Add invisible gene sets to be able to add the legend to the plot
+#  + geom_point(aes(x = x, y = y, colour = Trend), 
+#               alpha = 0.01, size = 1)
+#  + scale_color_manual(
+#    labels = c("Opposing regulation","Inhibited","Activated"),
+#    values = c("Change" = "orange", "DOWN" = "blue", "UP" = "darkred"),
+#    guide = guide_legend(override.aes = c(alpha = 1, size = 5)),
+#    aesthetics = "colour",
+#  ) 
+#  # --- SETS: BORDERS, FILL, LABELS --- #
+#  # Add the set borders of the Venn diagram
+#  + geom_venn_region(table, sets = c("U3017","U3047","U3054"), 
+#                     alpha = 0.3, show.legend = F) 
+#  + geom_venn_circle(table, sets = c("U3017","U3047","U3054"),
+#                     size = .5)
+#  # Fill every set white
+#  + scale_fill_venn_mix(table, sets =  c("U3017","U3047","U3054"),
+#                        guide='none', highlight = c("U3017-U3047-U3054"),
+#                        inactive_color='NA', active_color = 'NA')
+#  # Add the names of the sets
+#  + geom_venn_label_set(table, outwards_adjust = 2,
+#                        sets = c("U3017","U3047","U3054"),
+#                        fill = alpha("black", .35), 
+#                        aes(label =  c("U3054","U3047","U3017")))
+#  # --- DECORATE SETS; GENE EXPRESSION TRENDS --- #
+#  # add labels with numbers of incoherently activated genes
+#  + geom_venn_label_region(
+#    table %>% dplyr::filter(Trend == "Change"),
+#    sets = c("U3017","U3047","U3054"),
+#    aes(label=size ), fill = alpha("orange", .35),
+#    outwards_adjust=1.25, position=position_nudge(y=0.15))
+#  # add the numbers of up-regulated genes
+#  + geom_venn_label_region(
+#    table %>% dplyr::filter(Trend == "UP"),
+#    sets = c("U3017","U3047","U3054"),
+#    aes(label=size ), fill = alpha("darkred", .35),
+#    outwards_adjust=1.25, position=position_nudge(y=-0.15, x = 0.2))
+#  # add the numbers of down-regulated genes
+#  + geom_venn_label_region(
+#    table %>% dplyr::filter(Trend == "DOWN"),
+#    sets = c("U3017","U3047","U3054"),
+#    aes(label=size), fill = alpha("blue", .35),
+#    outwards_adjust=1.25, position=position_nudge(y=-0.15, x = -0.2)) 
+#  # --- SET THE THEME --- #
+#  + theme(
+#    legend.title = element_text(size = 12),
+#    legend.text = element_text(size = 12)))
+# 
+# # Save the plot
+# results_dir <- "Results/HGCC"
+# ggsave(file.path(wd, results_dir, "HGCC_GSEA_venn.png"), bg = "white", 
+#        plot = HGCC_GSEA_venn$plot, width = 12, height = 8)
+# 
+# # 3. Extract the genes in each region of the Venn diagram
+# tmp <- merge.rec(tmp, by = "ID", all = T, suffixes = c("", ""))
+# colnames(tmp) <- c("ID", "NES (U3017)", "p.adjust (U3017)", 
+#                    "NES (U3047)", "p.adjust (U3047)", "NES (U3054)", "p.adjust (U3054)")
+# 
+# HGCC_GSEA_venn$table <- table %>% 
+#   dplyr::select(ID, Trend, region) %>% 
+#   dplyr::inner_join(tmp, by = "ID") %>% 
+#   dplyr::mutate(Trend = dplyr::case_when(
+#     Trend == "Change" ~ "Opposing regulation",
+#     Trend == "UP" ~ "Activated",
+#     Trend == "DOWN" ~ "Inhibited"
+#   ),
+#   Description = pathways$gs_description[match(ID, pathways$gs_exact_source)]) %>% 
+#   dplyr::relocate(Description, .after = ID)
+# 
+# HGCC_GSEA_venn$table <- HGCC_GSEA_venn$table %>% 
+#   dplyr::group_split(region, .keep = T)
+# 
+# HGCC_GSEA_venn$table <- setNames(HGCC_GSEA_venn$table, c("U3017","U3017-U3047","U3017-U3047-U3054", "U3017-U3054",
+#                                  "U3047","U3047-U3054","U3054"))
+# 
+# # Save the table
+# sapply(names(HGCC_GSEA_venn$table), function(x){
+#   openxlsx::write.xlsx(HGCC_GSEA_venn$table[[x]], 
+#                        file.path(results_dir, paste0("HGCC_GSEA_venn_", x, ".xlsx")))
+# })
 
 ################################################################################
 # 2.) Comparing the Uppsala cells, U87 acidosis cels, and Lipid loaded cells   #
 ################################################################################
 
 # GSEA on the GO terms from MSigDB
-sets <- list(rbind(HGCC.GSEA$U3017$sig_df[,c("ID","Name", "NES")],
+TOTAL.NES <- list(rbind(HGCC.GSEA$U3017$sig_df[,c("ID","Name", "NES")],
                    HGCC.GO$U3017$sig_df[,c("ID","Name", "NES")]),
              rbind(HGCC.GSEA$U3047$sig_df[,c("ID","Name", "NES")],
                    HGCC.GO$U3047$sig_df[,c("ID","Name", "NES")]),
@@ -177,11 +177,25 @@ sets <- list(rbind(HGCC.GSEA$U3017$sig_df[,c("ID","Name", "NES")],
              rbind(CCLD.GSEA$sig_df[,c("ID","Name", "NES")],
                    CCLD.GO$sig_df[,c("ID","Name", "NES")]))
 # Merge the data frames
-table <- merge.rec(sets, by = c("ID","Name"), suffixes = c("",""), all = T) %>% 
+TOTAL.NES <- merge.rec(TOTAL.NES, by = c("ID","Name"), 
+                        suffixes = c("",""), all = T) %>% 
   setNames(., c("ID","Name", c("U3017","U3047","U3054","CCLD")))
 
+TOTAL.FDR <- list(rbind(HGCC.GSEA$U3017$sig_df[,c("ID","Name", "p.adjust")],
+                        HGCC.GO$U3017$sig_df[,c("ID","Name", "p.adjust")]),
+                  rbind(HGCC.GSEA$U3047$sig_df[,c("ID","Name", "p.adjust")],
+                        HGCC.GO$U3047$sig_df[,c("ID","Name", "p.adjust")]),
+                  rbind(HGCC.GSEA$U3054$sig_df[,c("ID","Name", "p.adjust")],
+                        HGCC.GO$U3054$sig_df[,c("ID","Name", "p.adjust")]),
+                  rbind(CCLD.GSEA$sig_df[,c("ID","Name", "p.adjust")],
+                        CCLD.GO$sig_df[,c("ID","Name", "p.adjust")]))
+# Merge the data frames
+TOTAL.FDR <- merge.rec(TOTAL.FDR, by = c("ID","Name"), 
+                       suffixes = c("",""), all = T) %>% 
+  setNames(., c("ID","Name", c("U3017.FDR","U3047.FDR","U3054.FDR","CCLD.FDR")))
+
 # Extract the allocation of each gene
-regions <- table %>%
+regions <- TOTAL.NES %>%
   # Pivot the data frame to long format along the expression values
   tidyr::pivot_longer(cols = !c(ID, Name), names_to = "Region", values_to = "Value") %>%
   # Filter out missing values
@@ -193,7 +207,8 @@ regions <- table %>%
   dplyr::mutate(Regions = as.factor(Regions))
 
 # Merge the regions with the table
-table <- dplyr::inner_join(table, regions, by = c("Name", "ID"))
+TOTAL.sets <- dplyr::inner_join(TOTAL.NES, TOTAL.FDR, by = c("Name", "ID")) %>%
+  dplyr::inner_join(., regions, by = c("Name", "ID"))
 
 # Calculate the number of genes in each subset
 regions <- regions %>% 
@@ -239,7 +254,7 @@ label.matrix <- label.matrix %>%
 
 set.seed(0)
 # Create a data frame for plotting the genes on the Venn diagram
-point.matrix <- dplyr::inner_join(table, label.matrix, 
+point.matrix <- dplyr::inner_join(TOTAL.sets, label.matrix, 
                       by = c("Regions"))
 point.matrix <- point.matrix %>% 
   dplyr::rowwise(.) %>% 
@@ -255,6 +270,9 @@ point.matrix <- point.matrix %>%
   ) %>% 
   dplyr::ungroup(.)
 
+TOTAL.sets <- dplyr::inner_join(TOTAL.sets, point.matrix[,c("ID","trend")], 
+                                by = c("ID"))
+
 trend.matrix <- point.matrix %>% 
   dplyr::group_by(Regions, trend) %>% 
   dplyr::summarise(Size = n()) %>% 
@@ -264,8 +282,7 @@ trend.matrix <- point.matrix %>%
 
   
 # Create the Venn diagram
-TOTAL_GSEA_venn <- list()
-(TOTAL_GSEA_venn$plot <- ggplot() +
+(TOTAL.venn <- ggplot() +
   # Clear the background and axes
   theme_dendro() +
   # Plot the ellipses
@@ -322,99 +339,44 @@ TOTAL_GSEA_venn <- list()
 
 # Save the plot
 ggsave(file.path(wd, results_dir,"..",paste0("TOTAL_GO+pathway_venn_",Sys.Date(), ".png")),
-       bg = "white", plot = TOTAL_GSEA_venn$plot, width = 12, height = 8)
+       bg = "white", plot = TOTAL.venn, width = 12, height = 8)
 
-table <- table %>% dplyr::group_split(Regions, .keep = T)
-names(table) <- names(regions)
+TOTAL.sets <- TOTAL.sets %>% 
+  dplyr::select(ID, Name, Regions, trend, U3017, U3017.FDR, U3047, U3047.FDR,
+                U3054, U3054.FDR, CCLD, CCLD.FDR) %>%
+  dplyr::rename(Trend = trend,
+                U3017.NES = U3017, U3047.NES = U3047,
+                U3054.NES = U3054, CCLD.NES = CCLD) %>%
+  dplyr::group_split(Regions, .keep = T)
+names(TOTAL.sets) <- names(regions)
 
 # Save the table
-sapply(names(table), function(x){
-  openxlsx::write.xlsx(table[[x]], 
-                       file.path(results_dir,"..", 
-                                 paste0("TOTAL_GO+pathway_venn_", x,"_", Sys.Date(),".xlsx")))
+sapply(names(TOTAL.sets), function(x){
+  openxlsx::write.xlsx(TOTAL.sets[[x]], 
+                       file.path(wd, results_dir, "..", 
+                                 paste0("TOTAL_GO+pathway_venn_", x, "_", date,".xlsx")))
 })
+
+rm(list = c(ls(pattern = "matrix"), "regions", "TOTAL.NES", "TOTAL.FDR"))
 
 ################################################################################
 # 3. Visualize selected enrichment scores                                      #
 ################################################################################
 
 library(enrichplot)
-palette = c("REACTOME_EXTRACELLULAR_MATRIX_ORGANIZATION" = "#8338EC",
-            "REACTOME_GLYCOSAMINOGLYCAN_METABOLISM" = "#118AB2",
-            "REACTOME_ECM_PROTEOGLYCANS" = "#FF006E",
-            "REACTOME_CHONDROITIN_SULFATE_DERMATAN_SULFATE_METABOLISM" = "#FFBE0B")
-ranks = which(CCLD.GSEA$df$Name %in% gsub(x = names(palette), "REACTOME_", ""))
-
-gsInfo <- function (object, geneSetID) {
-  geneList <- object@geneList
-  if (is.numeric(geneSetID)) 
-    geneSetID <- object@result[geneSetID, "ID"]
-  geneSet <- object@geneSets[[geneSetID]]
-  exponent <- object@params[["exponent"]]
-  df <- gseaScores(geneList, geneSet, exponent, fortify = TRUE)
-  df$ymin <- 0
-  df$ymax <- 0
-  pos <- df$position == 1
-  h <- diff(range(df$runningScore))/20
-  df$ymin[pos] <- -h
-  df$ymax[pos] <- h
-  df$geneList <- geneList
-  if (length(object@gene2Symbol) == 0) {
-    df$gene <- names(geneList)
-  }
-  else {
-    df$gene <- object@gene2Symbol[names(geneList)]
-  }
-  df$Description <- object@result[geneSetID, "Description"]
-  return(df)
-}
-gseaScores <- function (geneList, geneSet, exponent = 1, fortify = FALSE) 
-{
-  geneSet <- intersect(geneSet, names(geneList))
-  N <- length(geneList)
-  Nh <- length(geneSet)
-  Phit <- Pmiss <- numeric(N)
-  hits <- names(geneList) %in% geneSet
-  Phit[hits] <- abs(geneList[hits])^exponent
-  NR <- sum(Phit)
-  Phit <- cumsum(Phit/NR)
-  Pmiss[!hits] <- 1/(N - Nh)
-  Pmiss <- cumsum(Pmiss)
-  runningES <- Phit - Pmiss
-  max.ES <- max(runningES)
-  min.ES <- min(runningES)
-  if (abs(max.ES) > abs(min.ES)) {
-    ES <- max.ES
-  }
-  else {
-    ES <- min.ES
-  }
-  df <- data.frame(x = seq_along(runningES), runningScore = runningES, 
-                   position = as.integer(hits))
-  if (fortify == TRUE) {
-    return(df)
-  }
-  df$gene = names(geneList)
-  res <- list(ES = ES, runningES = df)
-  return(res)
-}
+palette = c("EXTRACELLULAR_MATRIX_ORGANIZATION" = "#8338EC",
+            "GLYCOSAMINOGLYCAN_METABOLISM" = "#118AB2",
+            "ECM_PROTEOGLYCANS" = "#FF006E",
+            "CHONDROITIN_SULFATE_DERMATAN_SULFATE_METABOLISM" = "#FFBE0B")
+ranks = which(CCLD.GSEA$df$Name %in% names(palette))
 
 runningScores  <- do.call(rbind, lapply(ranks, gsInfo, object = CCLD.GSEA$gsea))
-runningScores$Description <- factor(runningScores$Description, levels = names(palette))
-
-p1 <- ggplot(runningScores, aes(x = x)) + 
-  xlab(element_blank()) + 
-  ylab("Enrichment score (ES)") + theme_bw(base_size = 14) + 
-  geom_hline(yintercept = 0, linetype = "dashed", color = "grey") +
-  scale_x_continuous(expand = c(0, 0)) + 
-  scale_y_continuous(expand = c(0.01, 0.01), breaks = c(-0.1, 0, 0.1, 0.2, 0.3, 0.4, 0.5)) +
-  geom_point(aes(y = runningScore, color = Description),show.legend = F,
-             size = 2, data = subset(runningScores, position == 1)) + 
-  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), 
-        panel.grid.major.y = element_blank(), panel.grid.minor.y = element_blank(),
-        axis.text.x = element_blank(), axis.ticks.x = element_blank(),
-        axis.text.y = element_text(colour = "black", size = 14)) + 
-  scale_color_manual(values = palette)
+runningScores$Description <- factor(gsub(x = runningScores$Description, 
+                                         pattern = "REACTOME_",replacement =  ""),
+                                    levels = names(palette))
+p1 <- plotRunningScore(.df = runningScores, 
+                       .x = "x", .y = "runningScore",
+                       .color = "Description", .palette = palette)
 
 p2 <- ggplot(runningScores, aes(x = x)) +
   geom_linerange(aes(ymin = ymin, ymax = ymax, color = Description), show.legend = F, 
@@ -431,10 +393,18 @@ p2 <- ggplot(runningScores, aes(x = x)) +
 
 mytable <- CCLD.GSEA$sig_df[ranks,] %>% 
   dplyr::arrange(p.adjust) %>% 
+  tibble::remove_rownames() %>% 
+  tibble::column_to_rownames("Name") %>%
   dplyr::mutate(
     NES = round(NES, 4),
     FDR = round(p.adjust, 4)) %>%
-  dplyr::select(c(5,15))
+  dplyr::mutate(FDR = case_when(
+    FDR < 0.001 ~ paste("<0.001", "(***)"),
+    FDR < 0.01 ~ paste(as.character(FDR), "(**)"),
+    FDR < 0.05 ~ paste(as.character(FDR), "(*)"),
+    TRUE ~ as.character(FDR),
+  )) %>% 
+  dplyr::select(c(5,13))
 
 table_plot <- tableGrob(mytable, 
                         theme = ttheme_minimal(base_size = 14,
