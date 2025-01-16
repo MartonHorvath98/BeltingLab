@@ -1,4 +1,4 @@
-# Created: 2024 05 21 ; Last Modified: 2025 01 15
+# Created: 2024 05 21 ; Last Modified: 2025 01 16
 # KGO & MH
 ################################################################################
 #                              Data Processing                                 #
@@ -22,16 +22,12 @@ CCLD.expr <- normalizeTranscript(CCLD.dat, clariomdhumantranscriptcluster.db)
 CCLD.expr$log2FoldChange <- CCLD.expr$`CC_LD_(Clariom_D_Human).CEL` - CCLD.expr$`CC_noLD_(Clariom_D_Human).CEL`
 
 ####### Remove duplicate symbols based on lgFC
-CCLD.expr <- removeDuplicates(CCLD.expr, "log2FoldChange")
+CCLD.expr <- removeDuplicates(.data = CCLD.expr,.column = "log2FoldChange",
+                              .symbol = "SYMBOL")
 
-medians <- rowMedians(as.matrix(CCLD.expr[,c(2,3)]))
-hist(medians, 100, col = "cornsilk1", freq = FALSE, 
-     main = "Histogram of the median intensities", 
-     border = "antiquewhite4",
-     xlab = "Median intensities")
 ####### Check how many up and down- regulated genes
-length(which(CCLD.expr$log2FoldChange >=0.5)) # 6082
-length(which(CCLD.expr$log2FoldChange <=(-0.5))) # 867
+length(which(CCLD.expr$log2FoldChange >=0.5)) # 6066
+length(which(CCLD.expr$log2FoldChange <=(-0.5))) # 897
 
 # save RData
 dir.create("./RData", showWarnings = FALSE)
@@ -50,7 +46,7 @@ HGCC.dat <- read.celfiles(list.celfiles(data_dir, full.names = TRUE))
 HGCC.expr <- normalizeTranscript(HGCC.dat, clariomdhumantranscriptcluster.db)
 
 # Compare cell lines
-HGCC.res <- limmaDEA(.data = HGCC.expr,
+HGCC.deg <- limmaDEA(.data = HGCC.expr,
                      .design = c("U3017_2D", "U3017_2D","U3017_2D",
                                  "U3017_3D", "U3017_3D", "U3017_3D",
                                  "U3047_2D", "U3047_2D","U3047_2D",
@@ -60,87 +56,75 @@ HGCC.res <- limmaDEA(.data = HGCC.expr,
                      .contrast = c("tU3017_3D-tU3017_2D",
                                    "tU3047_3D-tU3047_2D",
                                    "tU3054_3D-tU3054_2D")) 
+names(HGCC.deg) <- c("U3017", "U3047", "U3054")
 # Compare global
-HGCC.global <- limmaDEA(.data = HGCC.expr,
-                        .design = c("2D", "2D","2D",
-                                    "3D", "3D", "3D",
-                                    "2D", "2D","2D",
-                                    "3D","3D","3D",
-                                    "2D", "2D", "2D",
-                                    "3D", "3D","3D"),
-                        .contrast = c("t3D-t2D")) 
+HGCC.deg <- c(HGCC.deg,
+              "global" = limmaDEA(.data = HGCC.expr,
+                                  .design = c("2D","2D","2D","3D","3D","3D",
+                                              "2D","2D","2D","3D","3D","3D",
+                                              "2D","2D","2D","3D","3D","3D"),
+                                  .contrast = c("t3D-t2D"))) 
+HGCC.deg <- lapply(HGCC.deg, removeDuplicates, .column = "t", .symbol = "ID.Symbol")
 
-HGCC.deg <- dplyr::inner_join(HGCC.expr, HGCC.res,
-                             by = c("PROBEID" = "Genes.ID",
-                                    "ENTREZID" = "Genes.Entrez",
-                                    "SYMBOL" = "Genes.Symbol")) %>% 
-  dplyr::inner_join(., HGCC.global,
-                    by = c("PROBEID" = "Genes.ID",
-                           "ENTREZID" = "Genes.Entrez",
-                           "SYMBOL" = "Genes.Symbol")) %>% 
-  dplyr::mutate(across(starts_with("Pv"), as.numeric)) %>%
-  dplyr::select(c(1, 20:22, # Identifier
-                  23, 26, 29, # U3017 results
-                  24, 27, 30, # U3047 results
-                  25, 28, 31, # U3054 results
-                  35:37, # Global results
-                  2:19)) # Expression values
-
-colnames(HGCC.deg)[5:16] <- paste(c("log2FoldChange","p.value","padj"), 
-                                 rep(c(".U3017", ".U3047", ".U3054", ""), each = 3),
-                                 sep = "")
-HGCC.deg <- removeDuplicates(HGCC.deg, "log2FoldChange")
-
-rm(list = c("HGCC.res", "HGCC.global"))
+HGCC.df <- merge.rec(HGCC.deg, by = c("ID.ID"), all = T, suffix = c("",""))
+HGCC.df <- HGCC.df[,c(1:3, 5, # Identifier
+                      4, 6:8, # U3017 2D vs 3D 
+                      12, 14:16, # U3047 2D vs 3D 
+                      20, 22:24, # U3054 2D vs 3D 
+                      28, 30:32)] %>%  # Global 2D vs 3D
+           setNames(., c("PROBEID", "Symbol", "EntrezID", "AveExpr",
+             "log2FoldChange.U3017", "statT.U3017", "pvalue.U3017", "padj.U3017",
+             "log2FoldChange.U3047", "statT.U3047", "pvalue.U3047", "padj.U3047",
+             "log2FoldChange.U3054", "statT.U3054", "pvalue.U3054", "padj.U3054",
+             "log2FoldChange.global", "statT.U3054", "pvalue.global", "padj.global"))
+                  
 
 ####### Check how many up and down- regulated genes
-length(which(HGCC.deg$log2FoldChange >= 0.5)) # 2543
-length(which(HGCC.deg$log2FoldChange <= (-0.5))) # 1836
+length(which(HGCC.df$log2FoldChange.global >= 0.5)) # 2539
+length(which(HGCC.df$log2FoldChange.global <= (-0.5))) # 1831
 
 # Save RData
 save(HGCC.deg, file = "./RData/HGCC_2D3D_processedData.RData")
 # Save file
-write.xlsx(HGCC.deg, file = "./data/processed/HGCC_2D3D_processedData.xlsx")
+sapply(names(HGCC.deg), function(x){
+  write.xlsx(HGCC.deg[[x]], file = paste0("./data/processed/HGCC_",x,"_2D3D_processedData.xlsx"))
+})
 
-###############################################################################
-##      U87 AA vs NA (Illumina BEadChip)
-####### Chronic Acidosis   
-library(illuminaHumanv4.db)
-library(limma)
-library(ggplot2)
-library(reshape2)
-library(viridis)
+# ---------------------------------------------------------------------------- #
+# -           U87 Chronic Acidosis AA vs NA (Illumina BeadChip)              - #
+# ---------------------------------------------------------------------------- #
+data_dir <- "./data/raw/U87_AAvsNA"
+U87.dat <- read.ilmn(files=file.path(data_dir, "Sample_Probe_Summary.txt"),
+                 ctrlfiles=file.path(data_dir, "Control_Probe_Summary.txt"))
 
-setwd("./RawData/U87_AAvsNA/")
-x <- read.ilmn(files="./Sample_Probe_Summary.txt",ctrlfiles="./Control_Probe_Summary.txt")
-setwd("E:/Lab/Collabs/Anna/Analysis2024")
+AA.samples<- c(
+  # Chronic acidosis
+  "200118400068_I", #13U87selctrlpH74 - Selection control pH 7.4
+  "200118400035_I", #14U87selctrlpH74 - Selection control pH 7.4
+  "200118400035_D", #15U87selctrlpH74 - Selection control pH 7.4
+  "200118400035_K", #10U87selpH647 - Selection pH 6.4
+  "200118400035_G", #11U87selpH647 - Selection pH 6.4
+  "200118400035_F", #12U87selpH647 - Selection pH 6.4
+  # Acute acidosis
+  "200118400068_K", #7U87aactrl74 - Acute acidosis control pH 7.4
+  "200118400068_D", #8U87aactrl74 - Acute acidosis control pH 7.4
+  "200118400068_A", #9U87aactrl74 - Acute acidosis control pH 7.4
+  "200118400068_C", #4U87aapH68 - Acute acidosis pH 6.8
+  "200118400068_G", #5U87aapH68 - Acute acidosis pH 6.8
+  "200118400033_E", #6U87aapH68 - Acute acidosis pH 6.8
+  "200118400033_B", #1U87aapH64 - Acute acidosis pH 6.4
+  "200118400068_B", #2U87aapH64 - Acute acidosis pH 6.4
+  "200118400035_B") #3U87aapH64 - Acute acidosis pH 6.4
 
-#Wanted barcodes - Chronic Acidosis
-#13U87selctrlpH74 - 200118400068_I - Selection control pH 7.4
-#14U87selctrlpH74 - 200118400035_I - Selection control pH 7.4
-#15U87selctrlpH74 - 200118400035_D - Selection control pH 7.4
-#10U87selpH647 - 200118400035_K - Selection pH 6.4
-#11U87selpH647 - 200118400035_G - Selection pH 6.4
-#12U87selpH647 - 200118400035_F - Selection pH 6.4
-
-##Wanted barcodes - Acute Acidosis
-#7U87aactrl74 - 200118400068_K - Acute acidosis control pH 7.4
-#8U87aactrl74 - 200118400068_D - Acute acidosis control pH 7.4
-#9U87aactrl74 - 200118400068_A - Acute acidosis control pH 7.4
-
-#4U87aapH68 - 200118400068_C - Acute acidosis pH 6.8
-#5U87aapH68 - 200118400068_G - Acute acidosis pH 6.8
-#6U87aapH68 - 200118400033_E - Acute acidosis pH 6.8
-
-#1U87aapH64 - 200118400033_B - Acute acidosis pH 6.4
-#2U87aapH64 - 200118400068_B - Acute acidosis pH 6.4
-#3U87aapH64 - 200118400035_B - Acute acidosis pH 6.4
-
-samples<- c("200118400068_I", "200118400035_I", "200118400035_D",
-            "200118400035_K", "200118400035_G", "200118400035_F",
-            "200118400068_K", "200118400068_D", "200118400068_A",
-            "200118400068_C", "200118400068_G", "200118400033_E",
-            "200118400033_B", "200118400068_B", "200118400035_B")
+OX.samples <- c(
+  # Normoxia
+  "200118400033_G", #nox3 - atmospheric O2 (21%) control
+  "200118400035_L", #nox2 - atmospheric O2 (21%) control
+  "200118400033_I", #nox1 - atmospheric O2 (21%) control
+  # Hypoxia
+  "200118400035_E", #hox3 - 1% O2
+  "200118400035_H", #hox2 - 1% O2
+  "200118400033_I") #hox1 - 1% O2
 
 
 #normalization and background correction
@@ -150,7 +134,7 @@ y <- neqc(x)
 expressed <- rowSums(y$other$Detection < 0.05) >= 3
 y <- y[expressed,]
 
-#Get normalized expression matrix
+# Get normalized expression matrix
 gexp<- y$E
 
 gexp<- gexp[, samples]

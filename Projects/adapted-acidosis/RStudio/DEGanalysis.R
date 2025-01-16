@@ -1,6 +1,5 @@
-# Created: 2024 10  07 ; Last Modified: 2024 10 21
+# Created: 2024 10  07 ; Last Modified: 2025 01 16
 # MH
-
 ################################################################################
 #                     Set up the environment                                   #
 ################################################################################
@@ -10,6 +9,7 @@ wd <- getwd()
 path <- c("data/processed/")
 files <- list.files(file.path(wd, path),
                     pattern = ".xlsx$", full.names = TRUE)
+date <- Sys.Date()
 # Load packages
 source(file = file.path(wd, "packages.R"))
 # Source data processing functions
@@ -46,7 +46,7 @@ terms <- terms %>%
 
 #Results directory
 results_dir <- "Results/CCLD"
-dir.create(file.path(wd, results_dir), recursive = T, showWarnings = FALSE)
+dir.create(file.path(wd, results_dir, date), recursive = T, showWarnings = FALSE)
 
 # Data exploration 
 CCLD.df <- CCLD.expr[,c(5,7)] %>% 
@@ -64,21 +64,16 @@ CCLD.df <- CCLD.expr[,c(5,7)] %>%
       T ~ 'NS')) %>% 
   dplyr::filter(complete.cases(.))
 # Save file
+dir.create(file.path(wd, results_dir, date, "tables"), recursive = T, showWarnings = FALSE)
 write.xlsx(merge(CCLD.df, CCLD.expr[,c(2,3,5)], by.x = "Symbol", by.y = "SYMBOL"),
-           file.path(wd, results_dir, "LDvsnoLD_DEGs.xlsx"))
+           file.path(wd, results_dir, date, "tables", "LDvsnoLD_DEGs.xlsx"))
 
 ## extract entrez IDs for gene set of interest and background
-CCLD.genes <- list(
-  background = CCLD.df %>%
-    dplyr::arrange(desc(log2FoldChange)) %>%
-    dplyr::distinct(entrezID, .keep_all = T) %>%
-    dplyr::pull("log2FoldChange", name ="entrezID"),
-  interest = CCLD.df %>%
-    dplyr::filter(significance != "NS") %>%
-    dplyr::arrange(desc(log2FoldChange)) %>%
-    dplyr::pull("log2FoldChange", name ="entrezID")
-)
-
+CCLD.genes <- get_genelist(.df = CCLD.df,
+                           .filter = CCLD.df[["significance"]] %in% c("Signif. up-regulated", 
+                                                                "Signif. down-regulated"),
+                           .value = "log2FoldChange",
+                           .name = "entrezID")
 ## Run the ORA analysis
 CCLD.ORA <- list()
 CCLD.ORA <- run_ora(.interest = CCLD.genes$interest,
@@ -88,28 +83,31 @@ CCLD.ORA <- run_ora(.interest = CCLD.genes$interest,
 CCLD.ORA <- c(CCLD.ORA, extract_ora_results(.ora = CCLD.ORA$ora, .db = pathways))
 # Save the results
 openxlsx::write.xlsx(CCLD.ORA[c(2:3)], 
-                     file.path(wd, results_dir, "LDvsnoLD_pathway_ORA.xlsx"))
+                     file.path(wd, results_dir,  date, "tables", "LDvsnoLD_pathway_ORA.xlsx"))
 
 # GSEA on the GO terms from MSigDB
 CCLD.GO <- list()
 CCLD.GO <- run_gsea(.geneset = CCLD.genes$background, 
                     .terms = terms)
-
 CCLD.GO <- c(CCLD.GO, extract_gsea_results(.gsea = CCLD.GO$gsea, .db = terms))
+
 # Save the results
 openxlsx::write.xlsx(CCLD.GO[c(2:3)], 
-                     file.path(wd, results_dir, "LDvsnoLD_all_go&hallmark_GSEA.xlsx"))
+                     file.path(wd, results_dir,  date, "tables", "LDvsnoLD_all_go&hallmark_GSEA.xlsx"))
 
 # GSEA on the KEGG- and REACTOME pathways from MSigDB
 CCLD.GSEA <- list()
 CCLD.GSEA <- run_gsea(.geneset = CCLD.genes$background,
                       .terms = pathways)
 CCLD.GSEA <- c(CCLD.GSEA, extract_gsea_results(.gsea = CCLD.GSEA$gsea, .db = pathways))
-openxlsx::write.xlsx(CCLD.GSEA[c(2:3)], file.path(wd, results_dir, "LDvsnoLD_all_pathway_GSEA.xlsx"))
+
+# Save the results
+openxlsx::write.xlsx(CCLD.GSEA[c(2:3)],
+                     file.path(wd, results_dir,  date, "tables", "LDvsnoLD_all_pathway_GSEA.xlsx"))
 
 # ---- 2.) Hugo's Primary cells 2D vs 3D (Clariom D Human Pico) Affymetrix ---- #
 results_dir <- "Results/HGCC"
-dir.create(file.path(wd, results_dir), recursive = T, showWarnings = FALSE)
+dir.create(file.path(wd, results_dir, date), recursive = T, showWarnings = FALSE)
 
 # Prepare metadata table based on the sample names
 samples <- factor(c("U3017_2D", "U3017_2D","U3017_2D",
@@ -144,9 +142,6 @@ pca_base <- prcomp(t(HGCC.expr[,2:19]), center = TRUE, scale. = TRUE)
                                       "U3054_2D" = "steelblue", "U3054_3D" = "darkred"),
                            plot.ellipse = T, .ellipse = HGCC.meta$dimension))
   
-oligo::boxplot(HGCC.expr[,2:19], col = HGCC.meta$dimension, 
-               xlab = "Samples", ylab = "Expression", 
-               main = "HGCC 2D vs 3D expression")
 (HGCC.plots$PCA <- HGCC.plots$PCA +
   # define legend categories
   scale_fill_manual(name = "Groups",
@@ -157,23 +152,20 @@ oligo::boxplot(HGCC.expr[,2:19], col = HGCC.meta$dimension,
                      values = c("U3017_2D" = 15, "U3017_3D" = 15,
                                 "U3047_2D" = 16, "U3047_3D" = 16,
                                 "U3054_2D" = 17, "U3054_3D" = 17)) +
-  guides(color=guide_legend(ncol=3), fill=guide_legend(ncol=3))) 
+  guides(color=guide_legend(ncol=3), fill=guide_legend(ncol=3)))
 
 # Venn diagram from the shared DEGs
-HGCC.df <- list(
-  "U3017" = HGCC.deg[,c(3,5:7)],
-  "U3047" = HGCC.deg[,c(3,8:10)],
-  "U3054" = HGCC.deg[,c(3,11:13)],
-  "global" = HGCC.deg[,c(3,14:16)]
-)
-HGCC.df <- lapply(HGCC.df, function(x){
-  x %>% 
-    dplyr::mutate(across(!contains("SYMBOL"), ~as.numeric(.)))
+HGCC.deg <- lapply(HGCC.deg, function(x){
+  df = x %>% 
+    dplyr::rename(PROBEID = "ID.ID", Symbol = "ID.Symbol", 
+                  entrezID = "ID.Entrez", log2FoldChange = "logFC",
+                  pvalue = "P.Value", padj = "adj.P.Val")
+  
+  get_significance(.df = df)
 })
-HGCC.df <- get_significance(.list = HGCC.df)
 
 HGCC.venn <- list()
-HGCC.venn <- get_regions(.list = HGCC.df[1:3], .names = c("U3017","U3047","U3054"))
+HGCC.venn <- get_regions(.list = HGCC.deg[1:3], .names = c("U3017","U3047","U3054"))
 
 (HGCC.plots$VENN <- plot_venn(.data = HGCC.venn$df,
                            .sets = c("U3017","U3047","U3054"),
@@ -182,27 +174,34 @@ HGCC.venn <- get_regions(.list = HGCC.df[1:3], .names = c("U3017","U3047","U3054
                                        "U3017")))
 
 # Create a Vulcano plot for the shared DEGs
-(HGCC.plots$vulcano <- plot_vulcan(HGCC.df$global))
+(p1 <- plot_vulcan(HGCC.deg$U3017) + ggtitle("U3017"))
+(p2 <- plot_vulcan(HGCC.deg$U3047) + ggtitle("U3047"))
+(p3 <- plot_vulcan(HGCC.deg$U3054) + ggtitle("U3054"))
 
+(HGCC.plots$vulcano <- cowplot::plot_grid(p1, p2, p3, nrow = 1))
+
+dir.create(file.path(wd, results_dir, date, "plots"), recursive = T, showWarnings = FALSE)
 # Save the PCA plot
-ggsave(file.path(wd, results_dir, "HGCC_PCA_plot.png"), 
+ggsave(file.path(wd, results_dir, date, "plots", "HGCC_PCA_plot.png"), bg = "white",
        HGCC.plots$PCA, width = 8, height = 6, dpi = 300)
 # Save the VENN plot
-ggsave(file.path(wd, results_dir, "HGCC_VENN_plot.png"),
+ggsave(file.path(wd, results_dir, date, "plots", "HGCC_VENN_plot.png"), bg = "white",
        HGCC.plots$VENN, width = 12, height = 8, dpi = 300)
 # Save the Vulcano plot
-ggsave(file.path(wd, results_dir, "HGCC_Vulcano_plot.png"),
-       HGCC.plots$Vulcano, width = 8, height = 6, dpi = 300)
+ggsave(file.path(wd, results_dir, date, "plots", "HGCC_Vulcano_plot.png"), bg = "white",
+       HGCC.plots$vulcano, width = 18, height = 6, dpi = 300)
 
-rm(list = c("pca_base","HGCC.meta","samples"))
+rm(list = c("pca_base","p1","p2","p3","samples"))
 
 ### Over-representation (ORA) and Gene Set Enrichment Analysis (GSEA)
 # extract entrez IDs for gene set of interest and background
 HGCC.genes <- list()
-HGCC.genes <- lapply(HGCC.df, function(x){
+HGCC.genes <- lapply(HGCC.deg, function(x){
   get_genelist(.df = x, 
                .filter = x[["significance"]] %in% c("Signif. up-regulated", 
-                                                    "Signif. down-regulated"))
+                                                    "Signif. down-regulated"),
+               .value = "t",
+               .name = "entrezID")
 })
 # Run the ORA analysis
 HGCC.ORA <- list()
@@ -215,15 +214,17 @@ HGCC.ORA <- lapply(HGCC.ORA, function(x){
   return(c(x, extract_ora_results(.ora = x[["ora"]],
                                   .db = pathways)))})
 # Save the results
+dir.create(file.path(wd, results_dir, date, "tables"), recursive = T, showWarnings = FALSE)
 sapply(names(HGCC.ORA), function(x){
   openxlsx::write.xlsx(HGCC.ORA[[x]][c(2:3)], 
-                       file.path(wd, results_dir, paste0("HGCC_", x, "_all_pathway_ORA.xlsx")))
+                       file.path(wd, results_dir, date, "tables",
+                                 paste0("HGCC_", x, "_all_pathway_ORA.xlsx")))
 })
 
 # Run the GSEA analysis
 HGCC.GO <- list()
 HGCC.GO <- lapply(HGCC.genes, function(x){
-  run_gsea(.geneset = x[["interest"]], .terms = terms)})
+  run_gsea(.geneset = x[["background"]], .terms = terms)})
 HGCC.GO <- lapply(HGCC.GO,
                   function(x){
                     return(c(x, 
@@ -234,7 +235,8 @@ HGCC.GO <- lapply(HGCC.GO,
 # Save the results
 sapply(names(HGCC.GO), function(x){
   openxlsx::write.xlsx(HGCC.GO[[x]][c(2:3)], 
-                       file.path(wd, results_dir, paste0("HGCC_", x, "_all_go&hallmark_GSEA.xlsx")))
+                       file.path(wd, results_dir, date, "tables",
+                                 paste0("HGCC_", x, "_all_go&hallmark_GSEA.xlsx")))
 })
 
 HGCC.GSEA <- list()
@@ -250,13 +252,14 @@ HGCC.GSEA <- lapply(HGCC.GSEA,
 # Save the results
 sapply(names(HGCC.GSEA), function(x){
   openxlsx::write.xlsx(HGCC.GSEA[[x]][c(2:3)], 
-                       file.path(wd, results_dir, paste0("HGCC_", x, "_all_pathway_GSEA.xlsx")))
+                       file.path(wd, results_dir, date, "tables",
+                                 paste0("HGCC_", x, "_all_pathway_GSEA.xlsx")))
 })
 
 interest_genes <- c("CSGALNACT1","CSGALNACT2","CHSY1","CHSY3","CHPF","CHPF2",
                     "DCN","BGN","DSE","DSEL","CA9","HIF1A","GOS2","HIG2")
 
-HGCC.subset <- HGCC.deg %>% 
+HGCC.subset <- HGCC.expr %>% 
   dplyr::select("SYMBOL" | contains(".CEL")) %>% 
   dplyr::filter(SYMBOL %in% interest_genes)
 
@@ -276,4 +279,5 @@ HGCC.subset <- HGCC.subset %>%
                    se = sd(expression)/sqrt(n()))
 
 openxlsx::write.xlsx(HGCC.subset, 
-                     file.path(wd, results_dir, "HGCC_genes-of-interest_expression.xlsx"))
+                     file.path(wd, results_dir, date, "tables",
+                               "HGCC_genes-of-interest_expression.xlsx"))
