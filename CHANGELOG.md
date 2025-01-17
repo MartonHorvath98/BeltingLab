@@ -27,4 +27,4 @@
 *  Update README - minor corrections [View](https://bitbucket.org/projects/test/repos/my-project/commits/2f134f077480d59a73cbf32c7ac02b995ec43652)
 *  Update README - add genome alignment step [View](https://bitbucket.org/projects/test/repos/my-project/commits/1de7358a82a9eb765c8a977c6a83349363c83e2d)
 *  Update workflow - Add reference genome indexing step [View](https://bitbucket.org/projects/test/repos/my-project/commits/69cab667455d01e3b65daacdb1d4d0a6ea14d256)
-*  Update scripts - shorter k-mer genome index, updated alignment library type [View](https://bitbucket.org/projects/test/repos/my-project/commits/b068a0717ad5fbdbf23e4d000f5dd30e6ac6b587)bdbf23e4d000f5dd30e6ac6b587)
+*  Update scripts - shorter k-mer genome index, updated alignment library type [View](https://bitbucket.org/projects/test/repos/my-project/commits/b068a0717ad5fbdbf23e4d000f5dd30e6ac6b587)
