@@ -56,6 +56,7 @@ HGCC.deg <- limmaDEA(.data = HGCC.expr,
                      .contrast = c("tU3017_3D-tU3017_2D",
                                    "tU3047_3D-tU3047_2D",
                                    "tU3054_3D-tU3054_2D")) 
+
 names(HGCC.deg) <- c("U3017", "U3047", "U3054")
 # Compare global
 HGCC.deg <- c(HGCC.deg,
