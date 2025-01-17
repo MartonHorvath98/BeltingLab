@@ -30,7 +30,7 @@ removeDuplicates <- function(.data, .column, .symbol){
   # Sort the data frame based on the log2FC values
   data <- .data[order(abs(.data[[.column]]), decreasing = TRUE),]
   # Remove duplicates
-  data <- data[!duplicated(.data[[.symbol]]),]
+  data <- data[!duplicated(data[[.symbol]]),]
   return(data)
 
 }
@@ -41,16 +41,14 @@ limmaDEA <- function(.data, .design, .contrast){
   mat <- .data[,sapply(.data, is.numeric)]
   colnames(mat) <- gsub("_\\(.*$", "\\1", colnames(mat))
   rownames(mat) <- .data$PROBEID
-  print(head(mat))
   # Create a design matrix
   t <- as.factor(.design)
   design <- model.matrix(~0 + t)
-  print(design)
   # Fit the linear model
   fit <- lmFit(mat, design)
   fit$genes$ID <- rownames(mat)
   fit$genes$Symbol <- .data$SYMBOL
-  fit$genes$Entrez <- .data$ENTREZID
+  
   
   # Fit the contrasts
   
@@ -68,13 +66,43 @@ limmaDEA <- function(.data, .design, .contrast){
 }
 
 # ---------------------------------------------------------------------- #
+# Function - Illmina beadChip data preprocessing                         #
+# ---------------------------------------------------------------------- #
+# I.) Normalize transcript abundance using control probes
+normalizeIllumina <- function(.df, .samples = colnames(.df$E)){
+  #normalization and background correction
+  df <- neqc(.df)
+  # keep only selected samples
+  df <- df[, .samples]
+  #keep probes that are expressed in at least three arrays according to a detection p-values of 5%:
+  expressed <- rowSums(df$other$Detection < 0.05) >= 3
+  df <- df[expressed,]
+  
+  #Get annotation
+  annot <- df$genes
+  annot <- cbind(PROBEID=rownames(annot), annot)
+  annot <- annot[,-3]
+  
+  # add annotation to the expression matrix 
+  df <- as.data.frame(df$E)
+  df$PROBEID <- rownames(df)
+  df <- merge(df, annot, by="PROBEID")
+  
+  #Filter the gene expression to contain only values with genesymbol
+  idx <- which(df$SYMBOL == "")
+  df<- df[-idx,]
+  
+  return(df)
+}
+
+# ---------------------------------------------------------------------- #
 # Function - PCA                                                         #
 # ---------------------------------------------------------------------- #
 # I.) CREATE PCA PLOT
 # The function to create a PCA plot with the ggbiplot package takes a prcomp
 # matrix, groupings based on the metadata, the colors and names of the different
 # treatments from the user input
-plot_pca <- function(data, .groups, .labels, .values,
+plot_pca <- function(data, .groups, .labels = NULL, .values = NULL,
                      plot.ellipse = F, .ellipse){
   plot <- (
     # create a biplot object
@@ -102,6 +130,7 @@ plot_pca <- function(data, .groups, .labels, .values,
                      type = "norm", level = 0.68, alpha = .3, 
                      linetype = 2, show.legend = F)
   }
+  return(plot)
 }
 
 # ---------------------------------------------------------------------- #
@@ -116,8 +145,8 @@ get_significance <- function(.df){
              # Add a columns...
              dplyr::mutate(
                # ... for ENTREZ gene identifiers, for downstream analyses
-               # entrezID = mapIds(org.Hs.eg.db, symbol, keytype = "SYMBOL", 
-               #                   column = "ENTREZID"),
+               entrezID <- mapIds(org.Hs.eg.db, SYMBOL, keytype = "SYMBOL", 
+                                column = "ENTREZID"),
                # ... for significance levels using the thresholds:
                #                            p-adj < 0.05, abs(log2FC) > 0.5
                significance = dplyr::case_when(
@@ -494,39 +523,41 @@ gseaScores <- function (geneList, geneSet, exponent = 1, fortify = FALSE)
 plotRunningScore <- function(.df, .x, .y, .color, .palette){
   subset <- subset(.df, position == 1)
   
-  return(ggplot(.df, aes(x = .df[[.x]])) 
-         + xlab(element_blank()) 
-         + ylab("Enrichment score (ES)") 
-         + theme_bw(base_size = 14) 
+  return(ggplot(.df, aes(x = !!sym(.x)))
+         + xlab(element_blank())
+         + ylab("Enrichment score (ES)")
+         + theme_bw(base_size = 14)
          + geom_hline(yintercept = 0, linetype = "dashed", color = "grey")
-         + scale_x_continuous(expand = c(0, 0)) 
-         + scale_y_continuous(expand = c(0.01, 0.01), 
+         + scale_x_continuous(expand = c(0, 0))
+         + scale_y_continuous(expand = c(0.01, 0.01),
                               breaks = c(-0.1, 0, 0.1, 0.2, 0.3, 0.4, 0.5))
-         + geom_point(aes(x = .data[[.x]], y = .data[[.y]], color = .data[[.color]]), show.legend = F,
-                      size = 2, data = subset)
+         + geom_point(aes(x = !!sym(.x), y = !!sym(.y), color = !!sym(.color)),
+                      show.legend = F, size = 2, data = subset)
          + scale_color_manual(values = .palette)
-         + theme(panel.grid.major = element_blank(), 
+         + theme(panel.grid.major = element_blank(),
                  panel.grid.minor = element_blank(),
-                 panel.grid.major.y = element_blank(), 
+                 panel.grid.major.y = element_blank(),
                  panel.grid.minor.y = element_blank(),
-                 axis.text.x = element_blank(), 
+                 axis.text.x = element_blank(),
                  axis.ticks.x = element_blank(),
                  axis.text.y = element_text(colour = "black", size = 14))
          )
 }
 
-plotGeneRank <- function(.df, .x, .color, .palette){
+plotGeneRank <- function(.df, .x, .color, .facet, .palette){
   subset <- subset(.df, position == 1)
+  facet <- as.formula(.facet)
   
-  return(ggplot(.df, aes(x = .df[[.x]])) 
-         + geom_linerange(aes(ymin = ymin, ymax = ymax, color = .data[[.color]]), 
+  
+  return(ggplot(.df, aes(x = !!sym(.x))) 
+         + geom_linerange(aes(ymin = ymin, ymax = ymax, color = !!sym(.color)), 
                           show.legend = F, size = 1, data = subset) 
          + theme_bw(base_size = 14) 
          + xlab("Rank in ordered gene list") 
          + scale_x_continuous(expand = c(0, 0)) 
          + scale_y_continuous(expand = c(0, 0)) 
          + scale_color_manual(values = .palette) 
-         + facet_grid(.df[[.color]]~., scales = "free_y") 
+         + facet_grid(facet, scales = "free_y") 
          + theme(panel.grid.major = element_blank(), 
                  panel.grid.minor = element_blank(), 
                  panel.grid.major.y = element_blank(),

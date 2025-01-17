@@ -256,28 +256,100 @@ sapply(names(HGCC.GSEA), function(x){
                                  paste0("HGCC_", x, "_all_pathway_GSEA.xlsx")))
 })
 
-interest_genes <- c("CSGALNACT1","CSGALNACT2","CHSY1","CHSY3","CHPF","CHPF2",
-                    "DCN","BGN","DSE","DSEL","CA9","HIF1A","GOS2","HIG2")
+# ---- 3.) U87 Chronic Acidosis AA vs NA & HOX vs NOX (Illumina BeadChip) ---- #
+results_dir <- "Results/U87"
+dir.create(file.path(wd, results_dir, date), recursive = T, showWarnings = FALSE)
 
-HGCC.subset <- HGCC.expr %>% 
-  dplyr::select("SYMBOL" | contains(".CEL")) %>% 
+# Prepare metadata table based on the sample names
+samples <- factor(c("control_sel", "control_sel", "control_sel",
+                    "sel_pH64", "sel_pH64", "sel_pH64",
+                    "control_acu", "control_acu", "control_acu",
+                    "acu_pH68", "acu_pH68", "acu_pH68",
+                    "acu_pH64", "acu_pH64", "acu_pH64",
+                    "control_nox", "control_nox", "control_nox",
+                    "hypoxia", "hypoxia", "hypoxia"),
+                  levels = c("control_sel", "sel_pH64", "control_acu",
+                             "acu_pH68", "acu_pH64", "control_nox", "hypoxia"))
+U87.meta <- data.frame("samplenames" = samples) %>%
+  # extract information from the sample names
+  dplyr::mutate(group = dplyr::case_when( # extract the cell IDs
+    stringr::str_detect(samples, "sel") ~ "selection",
+    stringr::str_detect(samples, "acu") ~ "acute",
+    stringr::str_detect(samples, "ox") ~ "oxygen"
+    ),
+  group = factor(group, levels = c("oxygen","acute","selection"))) %>%
+  dplyr::mutate(treatment = dplyr::case_when( # extract the cell IDs
+    stringr::str_detect(samples, "control") ~ "control",
+    stringr::str_detect(samples, "sel") ~ "selective-acidosis",
+    stringr::str_detect(samples, "acu") ~ "acute-acidosis",
+    stringr::str_detect(samples, "hypo") ~ "hypoxia"
+  ),
+  treatment = factor(treatment, 
+                     levels = c("control","hypoxia",
+                                "acute-acidosis","selective-acidosis")))
+
+###  Data exploration
+U87.plots <- list()
+# create PCA plot
+pca_base <- prcomp(t(U87.expr[,2:22]), center = TRUE, scale. = TRUE)
+(U87.plots$PCA <- plot_pca(
+  data = pca_base, 
+  .groups = U87.meta$samplenames, 
+  .labels = c(
+    "control_sel"="Control (SA)","sel_pH64"="Selective acidosis (pH 6.4)",
+    "control_acu"="Control (AA)","acu_pH64"="Acute acidosis (pH 6.4)","acu_pH68"="Acute acidosis (pH 6.8)",
+    "control_nox"="Control (NOX)","hypoxia"="Hypoxia"),
+  .values = c(
+    "control_sel"="skyblue","sel_pH64"="salmon",
+    "control_acu"="skyblue","acu_pH64"="magenta","acu_pH68"="purple",
+    "control_nox"="skyblue","hypoxia"="darkred")))
+
+(U87.plots$PCA <- U87.plots$PCA +
+    # define legend categories
+    scale_shape_manual(name = "Groups",
+                       labels = c(
+                         "control_sel"="Control (SA)","sel_pH64"="Selective acidosis (pH 6.4)",
+                         "control_acu"="Control (AA)","acu_pH64"="Acute acidosis (pH 6.4)","acu_pH68"="Acute acidosis (pH 6.8)",
+                         "control_nox"="Control (NOX)","hypoxia"="Hypoxia"),
+                       values = c(
+                         "control_sel"=15,"sel_pH64"=15,
+                         "control_acu"=16,"acu_pH64"=16,"acu_pH68"=16,
+                         "control_nox"=17,"hypoxia"=17)) +
+  guides(color=guide_legend(ncol=3), fill=guide_legend(ncol=3)))
+
+
+interest_genes <- c("CSGALNACT1","CSGALNACT2","CHSY1","CHSY3","CHPF","CHPF2",
+                    "DCN","BGN","DSE","DSEL","CA9","HIF1A","G0S2","C7orf68")
+
+U87.subset <- as.data.frame(U87.dat) %>% 
+  dplyr::select(c("SYMBOL" | contains(samples))) %>% 
+  tibble::rownames_to_column("PROBEID") %>% 
+  dplyr::filter(PROBEID %in% c(U87.deg$`sel_pH647-control_sel`$ID.ID,
+                                      U87.deg$`acu_pH68-control_acu`$ID.ID,
+                                      U87.deg$`acu_pH64-control_acu`$ID.ID,
+                                      U87.deg$`hypoxia-control_nox`$ID.ID)) %>% 
   dplyr::filter(SYMBOL %in% interest_genes)
 
-HGCC.subset <- HGCC.subset %>% 
-  tidyr::pivot_longer(cols = -SYMBOL, values_to = "expression",
+U87.subset <- U87.subset %>% 
+  tidyr::pivot_longer(cols = !c(SYMBOL,PROBEID), values_to = "expression",
                       names_to = "sample") %>% 
   dplyr::rowwise(.) %>% 
-  dplyr::mutate(sample = gsub(x = sample,
-                              pattern = "_parental_[123]_\\(Clariom_D_Human\\).CEL",
-                              replacement = "")) %>% 
-  tidyr::separate_wider_delim(col = sample, delim = "_", 
-                              names = c("cell_line", "dimension")) %>%
-  dplyr::group_by(SYMBOL, dimension) %>% 
-  dplyr::summarize(sample = paste(cell_line, dimension,sep = "_"),
+  dplyr::mutate(treatment = case_match(sample,
+    c("200118400068_I","200118400035_I","200118400035_D") ~ "control_sel",
+    c("200118400035_K","200118400035_G","200118400035_F") ~ "sel_pH64",
+    c("200118400068_K","200118400068_D","200118400068_A") ~ "control_acu",
+    c("200118400068_C","200118400068_G","200118400033_E") ~ "acu_pH64",
+    c("200118400033_B","200118400068_B","200118400035_B") ~ "acu_pH68",
+    c("200118400033_G","200118400035_L","200118400033_H") ~ "control_nox",
+    c("200118400035_E","200118400035_H","200118400033_I") ~ "hypoxia"
+  )) %>%
+  dplyr::group_by(SYMBOL, treatment) %>% 
+  dplyr::summarize(sample = sample, 
                    expression = expression,
                    mean = mean(expression),
                    se = sd(expression)/sqrt(n()))
 
-openxlsx::write.xlsx(HGCC.subset, 
+dir.create(file.path(wd, results_dir, date, "tables"), recursive = T, showWarnings = FALSE)
+openxlsx::write.xlsx(U87.subset, 
                      file.path(wd, results_dir, date, "tables",
-                               "HGCC_genes-of-interest_expression.xlsx"))
+                               "U87_linear_scale_genes-of-interest_expression.xlsx"))
