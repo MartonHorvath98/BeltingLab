@@ -64,6 +64,7 @@ HGCC.deg <- c(HGCC.deg,
                                               "2D","2D","2D","3D","3D","3D",
                                               "2D","2D","2D","3D","3D","3D"),
                                   .contrast = c("t3D-t2D"))) 
+# Remove duplicate IDs
 HGCC.deg <- lapply(HGCC.deg, removeDuplicates, .column = "t", .symbol = "ID.Symbol")
 
 HGCC.df <- merge.rec(HGCC.deg, by = c("ID.ID"), all = T, suffix = c("",""))
@@ -91,13 +92,13 @@ sapply(names(HGCC.deg), function(x){
 })
 
 # ---------------------------------------------------------------------------- #
-# -           U87 Chronic Acidosis AA vs NA (Illumina BeadChip)              - #
+# -     U87 Chronic Acidosis AA vs NA & HOX vs NOX (Illumina BeadChip)       - #
 # ---------------------------------------------------------------------------- #
 data_dir <- "./data/raw/U87_AAvsNA"
 U87.dat <- read.ilmn(files=file.path(data_dir, "Sample_Probe_Summary.txt"),
                  ctrlfiles=file.path(data_dir, "Control_Probe_Summary.txt"))
 
-AA.samples<- c(
+samples <- c(
   # Chronic acidosis
   "200118400068_I", #13U87selctrlpH74 - Selection control pH 7.4
   "200118400035_I", #14U87selctrlpH74 - Selection control pH 7.4
@@ -114,95 +115,48 @@ AA.samples<- c(
   "200118400033_E", #6U87aapH68 - Acute acidosis pH 6.8
   "200118400033_B", #1U87aapH64 - Acute acidosis pH 6.4
   "200118400068_B", #2U87aapH64 - Acute acidosis pH 6.4
-  "200118400035_B") #3U87aapH64 - Acute acidosis pH 6.4
-
-OX.samples <- c(
+  "200118400035_B", #3U87aapH64 - Acute acidosis pH 6.4
   # Normoxia
   "200118400033_G", #nox3 - atmospheric O2 (21%) control
   "200118400035_L", #nox2 - atmospheric O2 (21%) control
-  "200118400033_I", #nox1 - atmospheric O2 (21%) control
+  "200118400033_H", #nox1 - atmospheric O2 (21%) control
   # Hypoxia
   "200118400035_E", #hox3 - 1% O2
   "200118400035_H", #hox2 - 1% O2
   "200118400033_I") #hox1 - 1% O2
 
-
 #normalization and background correction
-y <- neqc(x)
-
-#keep probes that are expressed in at least three arrays according to a detection p-values of 5%:
-expressed <- rowSums(y$other$Detection < 0.05) >= 3
-y <- y[expressed,]
-
-# Get normalized expression matrix
-gexp<- y$E
-
-gexp<- gexp[, samples]
-
-#Get annotation
-annot_chrAA<- y$genes
-#write.xlsx(annot_chrAA, file = "./GSEAfiles/Annotation_for_Illumina_Probes.xlsx", rowNames=TRUE)
-annot_chrAA<- cbind(PROBE_ID=rownames(annot_chrAA), annot_chrAA)
-annot_chrAA<- annot_chrAA[,-3]
+U87.expr <- normalizeIllumina(U87.dat, samples)
 
 #Perform DEG analysis
-pheno<- as.factor(c("control_sel", "control_sel", "control_sel",
-                    "sel_pH647", "sel_pH647", "sel_pH647",
-                    "control_acu", "control_acu", "control_acu",
-                    "acu_pH68", "acu_pH68", "acu_pH68",
-                    "acu_pH64", "acu_pH64", "acu_pH64"))
+U87.deg <- limmaDEA(.data = U87.expr,
+                     .design = c("control_sel", "control_sel", "control_sel",
+                                 "sel_pH647", "sel_pH647", "sel_pH647",
+                                 "control_acu", "control_acu", "control_acu",
+                                 "acu_pH68", "acu_pH68", "acu_pH68",
+                                 "acu_pH64", "acu_pH64", "acu_pH64",
+                                 "control_nox", "control_nox", "control_nox",
+                                 "hypoxia", "hypoxia", "hypoxia"),
+                     .contrast = c("tsel_pH647-tcontrol_sel",
+                                   "tacu_pH68-tcontrol_acu",
+                                   "tacu_pH64-tcontrol_acu",
+                                   "thypoxia-tcontrol_nox"))
 
-design <- model.matrix(~0+pheno)
-colnames(design)<-gsub("pheno", "", colnames(design))
-
-fit <- lmFit(gexp,design)
-fit$genes$Symbol <- annot_chrAA$SYMBOL
-
-#--- Contrasts of control groups against tested groups
-contrasts <- makeContrasts(sel_pH647-control_sel, acu_pH68-control_acu,
-                           acu_pH64-control_acu, levels=design) 
-
-ct.fit <- eBayes(contrasts.fit(fit, contrasts))
-res.fit<-decideTests(ct.fit,method="global", adjust.method="BH", p.value=0.05) #"holm", "hochberg", "bonferroni","none"
-
-#--- Make deg table with getfitlimma
-source("./Scripts/getFitLimma.R")
-deg.limma_chrAA<-getFitLimma(ct.fit,res.fit)
-
-deg.limma_chrAA$PROBEID<-rownames(deg.limma_chrAA)
-
-#Merge deg with individual sample values from gexp
-gexp<- as.data.frame(gexp)
-gexp$PROBEID<-rownames(gexp)
-
-deg.limma_chrAA2<-merge(deg.limma_chrAA, gexp, by="PROBEID")
-
-#remove duplicates based on the probe with highest abs FC
-symbols<- as.character(unique(deg.limma_chrAA2[which(duplicated(deg.limma_chrAA2$Symbol)),"Symbol"]))
-
-result<- NULL
-for (i in 1:length(symbols)) {
-  gene<- symbols[i]
-  mat<- deg.limma_chrAA2[which(deg.limma_chrAA2$Symbol==gene),]
-  mat<-mat[order(abs(mat$`logFC.sel_pH647-control_sel`), decreasing = TRUE),]
-  result<- rbind(result, mat[1,])
-}
-
-deg.limma_chrAA2<- deg.limma_chrAA2[-which(deg.limma_chrAA2$Symbol%in%symbols),]
-deg.limma_chrAA2<- rbind(deg.limma_chrAA2, result)
-
-rm(list = setdiff(ls(), c("deg.limma_chrAA2")))
+# Remove duplicate IDs
+names(U87.deg) <- c("sel_pH647-control_sel", "acu_pH68-control_acu",
+                    "acu_pH64-control_acu", "hypoxia-control_nox")
+U87.deg <- lapply(U87.deg, removeDuplicates, .column = "t", .symbol = "ID.Symbol")
 
 ####### Check how many up and down- regulated genes
-length(which(deg.limma_chrAA2$`logFC.sel_pH647-control_sel`>=0.5)) # 1987
-length(which(deg.limma_chrAA2$`logFC.sel_pH647-control_sel`<=(-0.5))) # 1986
+length(which(U87.deg$`sel_pH647-control_sel`$logFC >= 0.5)) # 1961
+length(which(U87.deg$`sel_pH647-control_sel`$logFC <= (-0.5))) # 1945
 
-#Save RDatas
-save(deg.limma_chrAA2, file = "./RData/U87_AAvsNA_processedData.RData")
-write.xlsx(deg.limma_chrAA2, file = "./ProcessedData/U87_AAvsNAprocessedData.xlsx")
-
-
-
+# Save RData
+save(U87.deg, file = "./RData/U87_AAvsNA_processedData.RData")
+# Save file
+sapply(names(U87.deg), function(x){
+  write.xlsx(U87.deg[[x]], file = paste0("./data/processed/U87_",x,"_processedData.xlsx"))
+})
 
 
 #######    PANC1 AA vs NA (Clariom D Human Pico) Affymetrix
