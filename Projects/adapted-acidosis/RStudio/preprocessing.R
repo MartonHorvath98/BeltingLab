@@ -1,4 +1,4 @@
-# Created: 2024 05 21 ; Last Modified: 2025 01 16
+# Created: 2024 05 21 ; Last Modified: 2025 01 20
 # KGO & MH
 ################################################################################
 #                              Data Processing                                 #
@@ -131,7 +131,7 @@ U87.expr <- normalizeIllumina(U87.dat, samples)
 
 #Perform DEG analysis
 U87.deg <- limmaDEA(.data = U87.expr,
-                     .design = c("control_sel", "control_sel", "control_sel",
+                    .design = c("control_sel", "control_sel", "control_sel",
                                  "sel_pH647", "sel_pH647", "sel_pH647",
                                  "control_acu", "control_acu", "control_acu",
                                  "acu_pH68", "acu_pH68", "acu_pH68",

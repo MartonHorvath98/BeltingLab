@@ -1,4 +1,4 @@
-# Created: 2024 10  07 ; Last Modified: 2025 01 16
+# Created: 2024 10  07 ; Last Modified: 2025 01 20
 # MH
 ################################################################################
 #                     Set up the environment                                   #
@@ -35,6 +35,12 @@ terms <- terms %>%
   dplyr::mutate(gs_subcat = ifelse(gs_cat == "H", "HALLMARK", gs_subcat),
                 gs_exact_source = ifelse(gs_cat == "H", gs_id, gs_exact_source)) %>% 
   dplyr::ungroup(.)
+
+DEG_palette <- c("NS" = '#c1c1c1',
+                 "Log10P" = '#363636',
+                 "Log2FoldChange" = '#767676',
+                 "Signif. up-regulated" = '#841f27',
+                 "Signif. down-regulated" = '#000f64')
 
 ################################################################################
 #             Differential gene expression analysis                            #
@@ -316,6 +322,69 @@ pca_base <- prcomp(t(U87.expr[,2:22]), center = TRUE, scale. = TRUE)
                          "control_acu"=16,"acu_pH64"=16,"acu_pH68"=16,
                          "control_nox"=17,"hypoxia"=17)) +
   guides(color=guide_legend(ncol=3), fill=guide_legend(ncol=3)))
+
+### Over-representation (ORA) and Gene Set Enrichment Analysis (GSEA)
+# extract entrez IDs for gene set of interest and background
+U87.genes <- list()
+U87.genes <- lapply(U87.deg, function(x){
+  get_genelist(.df = x, 
+               .filter = x[["significance"]] %in% c("Signif. up-regulated", 
+                                                    "Signif. down-regulated"),
+               .value = "t",
+               .name = "entrezID")
+})
+# Run the ORA analysis
+U87.ORA <- list()
+U87.ORA <- lapply(U87.genes,
+                   function (x){
+                     run_ora(.interest = x[["interest"]],
+                             .background = x[["background"]],
+                             .pathways = pathways)})
+U87.ORA <- lapply(U87.ORA, function(x){
+  return(c(x, extract_ora_results(.ora = x[["ora"]],
+                                  .db = pathways)))})
+# Save the results
+dir.create(file.path(wd, results_dir, date, "tables"), recursive = T, showWarnings = FALSE)
+sapply(names(U87.ORA), function(x){
+  openxlsx::write.xlsx(U87.ORA[[x]][c(2:3)], 
+                       file.path(wd, results_dir, date, "tables",
+                                 paste0("U87_", x, "_all_pathway_ORA.xlsx")))
+})
+
+# Run the GSEA analysis
+U87.GO <- list()
+U87.GO <- lapply(U87.genes, function(x){
+  run_gsea(.geneset = x[["background"]], .terms = terms)})
+U87.GO <- lapply(U87.GO,
+                  function(x){
+                    return(c(x, 
+                             extract_gsea_results(
+                               .gsea = x[["gsea"]],
+                               .db = terms)))
+                  })
+# Save the results
+sapply(names(U87.GO), function(x){
+  openxlsx::write.xlsx(U87.GO[[x]][c(2:3)], 
+                       file.path(wd, results_dir, date, "tables",
+                                 paste0("U87_", x, "_all_go&hallmark_GSEA.xlsx")))
+})
+
+U87.GSEA <- list()
+U87.GSEA <- lapply(U87.genes, function(x){
+  run_gsea(.geneset = x[["background"]], .terms = pathways)})
+U87.GSEA <- lapply(U87.GSEA,
+                    function(x){
+                      return(c(x, 
+                               extract_gsea_results(
+                                 .gsea = x[["gsea"]],
+                                 .db = pathways)))
+                    })
+# Save the results
+sapply(names(U87.GSEA), function(x){
+  openxlsx::write.xlsx(U87.GSEA[[x]][c(2:3)], 
+                       file.path(wd, results_dir, date, "tables",
+                                 paste0("U87_", x, "_all_pathway_GSEA.xlsx")))
+})
 
 
 interest_genes <- c("CSGALNACT1","CSGALNACT2","CHSY1","CHSY3","CHPF","CHPF2",
