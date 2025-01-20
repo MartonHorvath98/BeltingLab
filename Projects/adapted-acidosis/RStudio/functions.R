@@ -48,7 +48,7 @@ limmaDEA <- function(.data, .design, .contrast){
   fit <- lmFit(mat, design)
   fit$genes$ID <- rownames(mat)
   fit$genes$Symbol <- .data$SYMBOL
-  
+  fit$genes$entrezID <- .data$ENTREZID
   
   # Fit the contrasts
   
@@ -81,6 +81,8 @@ normalizeIllumina <- function(.df, .samples = colnames(.df$E)){
   #Get annotation
   annot <- df$genes
   annot <- cbind(PROBEID=rownames(annot), annot)
+  annot$ENTREZID = as.character(mapIds(org.Hs.eg.db, annot$SYMBOL, 
+                          keytype = "SYMBOL", column = "ENTREZID"))
   annot <- annot[,-3]
   
   # add annotation to the expression matrix 
@@ -568,3 +570,41 @@ plotGeneRank <- function(.df, .x, .color, .facet, .palette){
                  axis.text.x = element_text(colour = "black", size = 14))
   )
 }
+
+plotClusters <- function(.df, .pathways, .clusters, .palette){
+  df <- .df %>% 
+    dplyr::left_join(., .pathways, by = c("ID","Name")) %>%
+    dplyr::mutate(Category = as.factor(Category))
+  df <- df %>% 
+      expand_grid(facet_var = unique(df$Category[!is.na(df$Category)]))
+  
+  return(
+    ggplot() 
+    + geom_point(data = df, aes(x = NES, y = -log10(FDR)), 
+                 size = 2.5, alpha = 0.05) 
+    # Visualize clusters of interest
+    + geom_point(data = subset(df, !is.na(Category) & Category == facet_var),
+                 aes(x = NES, y = -log10(FDR), fill = Category), 
+                 shape = 21, color = "black", size = 2.5, alpha = 0.5)
+    # Label the terms of interest
+    + geom_label_repel(data = subset(df, ID %in% .pathways$ID & Category == facet_var),
+                      aes(x = NES, y = -log10(FDR), color = Category, 
+                          label = str_wrap(gsub("_"," ",Name), 25)), 
+                      fontface = "bold", size = 3)
+    + scale_color_manual(values = c("ECM"="#7E03A8FF",
+                                    "HYPOXIA"="#E56B5DFF",
+                                    "TGFb"="#FDC328FF"))
+    + scale_fill_manual(values = c("ECM"="#7E03A8FF",
+                                   "HYPOXIA"="#E56B5DFF",
+                                   "TGFb"="#FDC328FF"))
+    + facet_grid(~facet_var)
+    + labs(x = expression('NES'),
+           y = expression(paste(log[10], italic('FDR'))))
+    + scale_x_continuous(expand = expansion(0.2))
+    + theme_minimal() 
+    + theme(axis.title = element_text(size = 14), 
+            axis.text = element_text(size = 14, color = "#888888"),
+            strip.text = element_text(size = 14),
+            legend.position = 'none'))
+}
+

@@ -258,57 +258,52 @@ CCLD.enrichplot$plot <- cowplot::plot_grid(
 ggsave(file.path(results_dir, date, "plots", "CCLD_GSEA.svg"), bg = "white", device = "svg",
        plot = CCLD.enrichplot$plot, width = 11.7, height = 8.3, units = "in")
 
-interest_genes <- read.csv("genes-of-interest.txt", header = T,
+interest_genes <- read.csv("data/genes-of-interest.txt", header = T,
                            sep = "\t", stringsAsFactors = T)
+interest_genes <- c("CSGALNACT1","CSGALNACT2","CHSY1","CHSY3","CHPF","CHPF2",
+                    "DCN","BGN","DSE","DSEL","CA9","HIF1A","G0S2","C7orf68")
 
-heatmap_data <- interest_genes %>% 
-  dplyr::inner_join(., CC_LDvsnoLD[,3:5], by = c("Gene.name" = "SYMBOL")) %>%
-  dplyr::inner_join(., HGCC.df$U3017[,c(1,2)], by = c("Gene.name" = "symbol")) %>% 
-  dplyr::inner_join(., HGCC.df$U3047[,c(1,2)], by = c("Gene.name" = "symbol")) %>%
-  dplyr::inner_join(., HGCC.df$U3054[,c(1,2)], by = c("Gene.name" = "symbol")) %>% 
+TOTAL.heatmap <- list()
+TOTAL.heatmap$data <- interest_genes %>% 
+  dplyr::inner_join(., CCLD.df[,1:2], by = c("Gene.name" = "Symbol")) %>%
+  dplyr::inner_join(., HGCC.deg$U3017[,c(2,4)], by = c("Gene.name" = "Symbol")) %>% 
+  dplyr::inner_join(., HGCC.deg$U3047[,c(2,4)], by = c("Gene.name" = "Symbol")) %>%
+  dplyr::inner_join(., HGCC.deg$U3054[,c(2,4)], by = c("Gene.name" = "Symbol")) %>% 
   dplyr::rename_at(vars(contains("log2")), ~c("LDvsnoLD", "U3017", "U3047", "U3054")) %>%
   dplyr::mutate(Category = factor(Category, 
                                       levels = c("Acidosis/Hypoxia", "CSPG core", "CSPG Biosynthesis- GAG linker",
                                               "CSPG Biosynthesis","Lipid droplet"),
                                       labels = c("Acidosis/Hypoxia", "CSPG core", "GAG linker",
                                               "CSPG Biosynthesis","Lipid droplet"))) %>% 
-  # dplyr::mutate(avgFC = rowMeans(.[,c(4:7)])) %>% 
-  # dplyr::group_by(Category) %>%
-  # dplyr::mutate(rank = rank(avgFC, ties.method = "min")) %>% 
-  # dplyr::arrange(Category, desc(rank)) %>% 
-  # dplyr::ungroup() %>% 
   dplyr::select(Gene.name, Category, U3017, U3047, U3054, LDvsnoLD)
+
+TOTAL.heatmap$matrix <- as.matrix(TOTAL.heatmap$data[,c(3:6)])
 
 row_order <- match(c("CA9","VEGFA","CA12","NCAN","CSPG5","VCAN","BCAN","BGN",
                      "ACAN","DCN","CSPG4","CD44","XYLT1","XYLT2","CSGALNACT1",
                      "CHSY1","CHSY3","CHPF","CHPF2","DSEL","HILPDA", "FABP4",
                      "G0S2","PLIN2","PLIN1","FABP5"),
-                   heatmap_data$Gene.name)
-col_order <- order(c(as.numeric(proxy::dist(rbind(heatmap_matrix[,1, drop=T],
-                                                  heatmap_matrix[,4, drop = T]),
-                                            method = "euclidean", pairwise = T)),
-                     as.numeric(proxy::dist(rbind(heatmap_matrix[,2, drop=T],
-                                                  heatmap_matrix[,4, drop = T]),
-                                            method = "euclidean", pairwise = T)),
-                     as.numeric(proxy::dist(rbind(heatmap_matrix[,3, drop = T],
-                                                  heatmap_matrix[,4, drop = T]),
-                                            method = "euclidean", pairwise = T)),
-                     as.numeric(proxy::dist(rbind(heatmap_matrix[,4, drop =T],
-                                                  heatmap_matrix[,4, drop=T]),
-                                            method = "euclidean", pairwise = T))))
+                   TOTAL.heatmap$data$Gene.name)
+col_order <- order(c(
+  as.numeric(proxy::dist(rbind(TOTAL.heatmap$matrix[,1, drop=T],
+                               TOTAL.heatmap$matrix[,4, drop = T]),
+                         method = "euclidean", pairwise = T)),
+  as.numeric(proxy::dist(rbind(TOTAL.heatmap$matrix[,2, drop=T],
+                               TOTAL.heatmap$matrix[,4, drop = T]),
+                         method = "euclidean", pairwise = T)),
+  as.numeric(proxy::dist(rbind(TOTAL.heatmap$matrix[,3, drop = T],
+                               TOTAL.heatmap$matrix[,4, drop = T]),
+                         method = "euclidean", pairwise = T)),
+  as.numeric(proxy::dist(rbind(TOTAL.heatmap$matrix[,4, drop =T],
+                               TOTAL.heatmap$matrix[,4, drop=T]),
+                         method = "euclidean", pairwise = T))))
 
-heatmap_data <- heatmap_data[row_order,]
-heatmap_matrix <- heatmap_data[,c(3:6)]
-heatmap_matrix <- as.matrix(heatmap_matrix[,col_order])
-       
-row.names(heatmap_matrix) <- heatmap_data$Gene.name
 
-library(ComplexHeatmap)
-library(circlize)
-library(gridtext)
+row.names(TOTAL.heatmap$matrix) <- TOTAL.heatmap$data$Gene.name
+TOTAL.heatmap$matrix <- TOTAL.heatmap$matrix[row_order,col_order]
 
 cat_annot = rowAnnotation(
-  Category = heatmap_data$Category,
+  Category = TOTAL.heatmap$data$Category[row_order],
   col = list(Category = c("Acidosis/Hypoxia" = "darkgreen",
                           "CSPG core" = "turquoise",
                           "GAG linker" = "#8D00FA",
@@ -322,35 +317,39 @@ cat_annot = rowAnnotation(
 )
 
 matrix_col = colorRamp2(c(-4, 0, 4), c("blue", "white", "red"))
-(ht = Heatmap(heatmap_matrix, 
-        name = "Log2 (Fold change)",
-        col = matrix_col,
-        
-        cluster_rows = F,
-        cluster_columns = F,
-        row_names_side = "left",
-        row_names_gp = gpar(fontsize = 14, family = "arial"),
-        row_gap = unit(5, "mm"),
-        column_names_rot = 0,
-        column_names_centered = T,
-        column_names_side = "top",
-        column_names_gp = gpar(fontsize = 14, family = "arial"),
-        
-        column_labels = c("LDvsnoLD" = "", "U3047" = "U3047",
-                       "U3054" = "U3054", "U3017"="U3017"),
-        column_split = factor(c("LD vs. noLD", rep("2D vs. 3D", 3)),
-                           levels = c("LD vs. noLD", "2D vs. 3D")),
-        
-        right_annotation = cat_annot, 
-        heatmap_legend_param = list(direction = "vertical"),
-        border_gp = gpar(col = "black", lty = 2)))
+(TOTAL.heatmap$plot = Heatmap(TOTAL.heatmap$matrix, # data matrix
+                              
+                              ### row settings
+                              cluster_rows = F,
+                              row_gap = unit(5, "mm"),
+                              row_names_side = "left",
+                              row_names_gp = gpar(fontsize = 14,
+                                                  family = "arial"),
+                              
+                              ### column settings
+                              cluster_columns = F,
+                              column_names_rot = 0,
+                              column_names_centered = T,
+                              column_names_side = "top",
+                              column_names_gp = gpar(fontsize = 14, 
+                                                     family = "arial"),
+                              column_labels = c("LDvsnoLD" = "", 
+                                                "U3047" = "U3047",
+                                                "U3054" = "U3054", 
+                                                "U3017"="U3017"),
+                              column_split = factor(c("LD vs. noLD", rep("2D vs. 3D", 3)),
+                                                    levels = c("LD vs. noLD", "2D vs. 3D")),
+                              
+                              ### legend settings
+                              col = matrix_col, # color settings
+                              name = "Log2 (Fold change)", # color legend title
+                              right_annotation = cat_annot, 
+                              heatmap_legend_param = list(direction = "vertical"),
+                              border_gp = gpar(col = "black", lty = 2)))
 
-svg(file.path("..", results_dir, "heatmap.svg"), width = 12, height = 8)#,
-#    res = 300, units = "in")
-draw(ht, merge_legend = T,
+svg(file.path(results_dir,"..", "category_heatmap.svg"), width = 12, height = 8)
+draw(TOTAL.heatmap$plot , merge_legend = T,
      heatmap_legend_side = "right", annotation_legend_side = "right")
 dev.off()
 
-################################################################################
-# 4. Vulcano visualization of the shared terms and pathways                    #
-################################################################################
+

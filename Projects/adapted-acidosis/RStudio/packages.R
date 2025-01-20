@@ -89,6 +89,15 @@ suppressPackageStartupMessages(library(conicfit))
 if (!requireNamespace("scatterpie", quietly = TRUE))
     install.packages("scatterpie")
 suppressPackageStartupMessages(library(scatterpie))
+if (!requireNamespace("ComplexHeatmap", quietly = TRUE))
+    install.packages("ComplexHeatmap")
+suppressPackageStartupMessages(library(ComplexHeatmap))
+if (!requireNamespace("circlize", quietly = TRUE))
+    install.packages("circlize")
+suppressPackageStartupMessages(library(circlize))
+if (!requireNamespace("gridtext", quietly = TRUE))
+    install.packages("gridtext")
+suppressPackageStartupMessages(library(gridtext))
 
 ################################################################################
 # 4. Gene set enrichment and annotation packages                               #
