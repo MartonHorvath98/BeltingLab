@@ -249,14 +249,14 @@ table_grob <- tableGrob(
       fg_params = list(hjust = 0, x = 0,col = palette[c(5,1,2,3,4)]))
     )) 
 
-CCLD.enrichplot$plot <- cowplot::plot_grid(
-  p1, "", p2, table_grob,
-  byrow = T, nrow = 2, ncol = 2, 
-  rel_heights = c(1.5,1), rel_widths =  c(1,2),
-  margins = c(0.5, 0.5, 0.5, 0.5))
+(CCLD.enrichplot$plot <- cowplot::plot_grid(
+  p1, p2, #table_grob,
+  byrow = T, nrow = 2, ncol = 1, scale = .95, 
+  rel_heights = c(1.2,1), axis = "r", #rel_widths =  c(1,2),
+  margins = c(0.5, 0.5, 0.5, 0.5)))
 
 ggsave(file.path(results_dir, date, "plots", "CCLD_GSEA.svg"), bg = "white", device = "svg",
-       plot = CCLD.enrichplot$plot, width = 11.7, height = 8.3, units = "in")
+       plot = CCLD.enrichplot$plot, width = 6, height = 4.45, units = "in")
 
 interest_genes <- read.csv("data/genes-of-interest.txt", header = T,
                            sep = "\t", stringsAsFactors = T)
