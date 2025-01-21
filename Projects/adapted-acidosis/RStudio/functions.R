@@ -69,7 +69,34 @@ limmaDEA <- function(.data, .design, .contrast){
 # Function - Illmina beadChip data preprocessing                         #
 # ---------------------------------------------------------------------- #
 # I.) Normalize transcript abundance using control probes
-normalizeIllumina <- function(.df, .samples = colnames(.df$E)){
+tryMapID <- function(ID, inp, outp){
+  tryCatch(
+    {
+      suppressWarnings(
+      mapIds(org.Hs.eg.db, keys = ID, column = outp, keytype = inp, multiVals = "first")
+      )
+    },
+    error = function(e) {
+      message(conditionMessage(e))
+      return(NA)
+    }
+  )
+}
+
+switchAlias <- function(dbconn, ID){
+  alias <- as.character(dbconn[which(dbconn$alias == ID),]$symbol)[1]
+  
+  if (is.na(alias)){
+    return(ID)
+  } else {
+    return(alias)
+  }  # returns TRUE
+}
+
+
+normalizeIllumina <- function(.df, .dbconn, .samples = colnames(.df$E)){
+  x <- illuminaHumanv4ENTREZID
+
   #normalization and background correction
   df <- neqc(.df)
   # keep only selected samples
@@ -78,22 +105,37 @@ normalizeIllumina <- function(.df, .samples = colnames(.df$E)){
   expressed <- rowSums(df$other$Detection < 0.05) >= 3
   df <- df[expressed,]
   
-  #Get annotation
+  # get Illumina annotations
   annot <- df$genes
-  annot <- cbind(PROBEID=rownames(annot), annot)
-  annot$ENTREZID = as.character(mapIds(org.Hs.eg.db, annot$SYMBOL, 
-                          keytype = "SYMBOL", column = "ENTREZID"))
-  annot <- annot[,-3]
+  annot <- cbind(PROBEID=rownames(annot), 
+                 ENTREZID = sapply(as.list(x[rownames(annot)]), "[[", 1),
+                 annot)
+  annot <- annot %>%
+    dplyr::select(!TargetID) %>%
+    dplyr::filter(SYMBOL != "" & !is.na(SYMBOL)) %>% 
+    dplyr::rowwise() %>% 
+    # replace outdated gene symbols with the most recent ones
+    dplyr::mutate(
+      SYMBOL = ifelse(
+        ENTREZID == "NA" | is.na(ENTREZID), no = SYMBOL, yes =  switchAlias(.dbconn, SYMBOL))
+    )
   
-  # add annotation to the expression matrix 
+  # map Illumina annotations against the org.Hs.eg.db database
+  entrez <- tryMapID(annot$SYMBOL, "SYMBOL", "ENTREZID")
+  # refine annotations missing from the Illumina database
+  annot <- annot %>%
+    rowwise() %>%
+    dplyr::mutate(
+      ENTREZID = ifelse(
+        ENTREZID == "NA" | is.na(ENTREZID), no = ENTREZID, yes = entrez[[SYMBOL]]))
+
+  # add annotation to the expression matrix
   df <- as.data.frame(df$E)
   df$PROBEID <- rownames(df)
-  df <- merge(df, annot, by="PROBEID")
-  
-  #Filter the gene expression to contain only values with genesymbol
-  idx <- which(df$SYMBOL == "")
-  df<- df[-idx,]
-  
+  df <- merge(annot, df, by="PROBEID")
+  # remove rows with missing ENTREZID
+  idx <- which(is.na(df$ENTREZID))
+  df <- df[-idx,]
   return(df)
 }
 
@@ -146,9 +188,6 @@ get_significance <- function(.df){
              # setNames(., c("symbol", "log2FoldChange", "pvalue", "padj")) %>% 
              # Add a columns...
              dplyr::mutate(
-               # ... for ENTREZ gene identifiers, for downstream analyses
-               entrezID <- mapIds(org.Hs.eg.db, SYMBOL, keytype = "SYMBOL", 
-                                column = "ENTREZID"),
                # ... for significance levels using the thresholds:
                #                            p-adj < 0.05, abs(log2FC) > 0.5
                significance = dplyr::case_when(
@@ -534,7 +573,7 @@ plotRunningScore <- function(.df, .x, .y, .color, .palette){
          + scale_y_continuous(expand = c(0.01, 0.01),
                               breaks = c(-0.1, 0, 0.1, 0.2, 0.3, 0.4, 0.5))
          + geom_point(aes(x = !!sym(.x), y = !!sym(.y), color = !!sym(.color)),
-                      show.legend = F, size = 2, data = subset)
+                      show.legend = F, size = 1, data = subset)
          + scale_color_manual(values = .palette)
          + theme(panel.grid.major = element_blank(),
                  panel.grid.minor = element_blank(),

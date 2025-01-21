@@ -286,44 +286,49 @@ U87.meta <- data.frame("samplenames" = samples) %>%
   group = factor(group, levels = c("oxygen","acute","selection"))) %>%
   dplyr::mutate(treatment = dplyr::case_when( # extract the cell IDs
     stringr::str_detect(samples, "control") ~ "control",
-    stringr::str_detect(samples, "sel") ~ "selective-acidosis",
-    stringr::str_detect(samples, "acu") ~ "acute-acidosis",
+    stringr::str_detect(samples, "sel") ~ "acidosis",
+    stringr::str_detect(samples, "acu") ~ "acidosis",
     stringr::str_detect(samples, "hypo") ~ "hypoxia"
   ),
   treatment = factor(treatment, 
                      levels = c("control","hypoxia",
-                                "acute-acidosis","selective-acidosis")))
+                                "acidosis")))
 
 ###  Data exploration
 U87.plots <- list()
 # create PCA plot
-pca_base <- prcomp(t(U87.expr[,2:22]), center = TRUE, scale. = TRUE)
+pca_base <- prcomp(t(U87.expr[,5:25]), center = TRUE, scale. = TRUE)
 (U87.plots$PCA <- plot_pca(
   data = pca_base, 
   .groups = U87.meta$samplenames, 
   .labels = c(
-    "control_sel"="Control (SA)","sel_pH64"="Selective acidosis (pH 6.4)",
+    "control_sel"="Control (CA)","sel_pH64"="Chronic acidosis (pH 6.4)",
     "control_acu"="Control (AA)","acu_pH64"="Acute acidosis (pH 6.4)","acu_pH68"="Acute acidosis (pH 6.8)",
     "control_nox"="Control (NOX)","hypoxia"="Hypoxia"),
-  .values = c(
-    "control_sel"="skyblue","sel_pH64"="salmon",
-    "control_acu"="skyblue","acu_pH64"="magenta","acu_pH68"="purple",
-    "control_nox"="skyblue","hypoxia"="darkred")))
+  .values = c(1:7)))
 
 (U87.plots$PCA <- U87.plots$PCA +
     # define legend categories
     scale_shape_manual(name = "Groups",
                        labels = c(
-                         "control_sel"="Control (SA)","sel_pH64"="Selective acidosis (pH 6.4)",
+                         "control_sel"="Control (CA)","sel_pH64"="Chronic acidosis (pH 6.4)",
                          "control_acu"="Control (AA)","acu_pH64"="Acute acidosis (pH 6.4)","acu_pH68"="Acute acidosis (pH 6.8)",
                          "control_nox"="Control (NOX)","hypoxia"="Hypoxia"),
                        values = c(
                          "control_sel"=15,"sel_pH64"=15,
-                         "control_acu"=16,"acu_pH64"=16,"acu_pH68"=16,
-                         "control_nox"=17,"hypoxia"=17)) +
+                         "control_acu"=15,"acu_pH64"=15,"acu_pH68"=15,
+                         "control_nox"=15,"hypoxia"=15)) +
   guides(color=guide_legend(ncol=3), fill=guide_legend(ncol=3)))
 
 ### Over-representation (ORA) and Gene Set Enrichment Analysis (GSEA)
+U87.deg <- lapply(U87.deg, function(x){
+  df = x %>% 
+    dplyr::rename(PROBEID = "ID.ID", Symbol = "ID.Symbol",
+                  entrezID = "ID.entrezID", log2FoldChange = "logFC",
+                  pvalue = "P.Value", padj = "adj.P.Val")
+  
+  get_significance(.df = df)
+})
 # extract entrez IDs for gene set of interest and background
 U87.genes <- list()
 U87.genes <- lapply(U87.deg, function(x){

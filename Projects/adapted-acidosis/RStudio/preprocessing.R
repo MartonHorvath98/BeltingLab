@@ -97,7 +97,7 @@ sapply(names(HGCC.deg), function(x){
 # ---------------------------------------------------------------------------- #
 data_dir <- "./data/raw/U87_AAvsNA"
 U87.dat <- read.ilmn(files=file.path(data_dir, "Sample_Probe_Summary.txt"),
-                 ctrlfiles=file.path(data_dir, "Control_Probe_Summary.txt"))
+                     ctrlfiles=file.path(data_dir, "Control_Probe_Summary.txt"))
 
 samples <- c(
   # Chronic acidosis
@@ -126,8 +126,17 @@ samples <- c(
   "200118400035_H", #hox2 - 1% O2
   "200118400033_I") #hox1 - 1% O2
 
+# Connect to DB
+dbCon=org.Hs.eg_dbconn()
+
+# SQL query
+sqlQuery='SELECT * FROM alias, gene_info WHERE alias._id == gene_info._id;'
+
+# Query the database
+aliasSymbol=dbGetQuery(dbCon, sqlQuery)
+
 #normalization and background correction
-U87.expr <- normalizeIllumina(U87.dat, samples)
+U87.expr <- normalizeIllumina(U87.dat, .dbconn = aliasSymbol, .samples = samples)
 
 #Perform DEG analysis
 U87.deg <- limmaDEA(.data = U87.expr,
@@ -149,8 +158,8 @@ names(U87.deg) <- c("sel_pH647-control_sel", "acu_pH68-control_acu",
 U87.deg <- lapply(U87.deg, removeDuplicates, .column = "t", .symbol = "ID.Symbol")
 
 ####### Check how many up and down- regulated genes
-length(which(U87.deg$`sel_pH647-control_sel`$logFC >= 0.5)) # 1961
-length(which(U87.deg$`sel_pH647-control_sel`$logFC <= (-0.5))) # 1945
+length(which(U87.deg$`sel_pH647-control_sel`$logFC >= 0.5)) # 1876
+length(which(U87.deg$`sel_pH647-control_sel`$logFC <= (-0.5))) # 1866
 
 # Save RData
 save(U87.deg, file = "./RData/U87_AAvsNA_processedData.RData")

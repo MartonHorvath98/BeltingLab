@@ -49,6 +49,9 @@ suppressPackageStartupMessages(library(tidyr))
 if (!requireNamespace("stringr", quietly = TRUE))
   install.packages("stringr")
 suppressPackageStartupMessages(library(stringr))
+if (!requireNamespace("DBI", quietly = TRUE))
+  install.packages("DBI")
+suppressPackageStartupMessages(library(DBI))
 
 ################################################################################
 # 3. Visualization packages                                                    #
