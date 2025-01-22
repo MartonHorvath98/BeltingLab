@@ -398,11 +398,14 @@ interest_genes <- c("CSGALNACT1","CSGALNACT2","CHSY1","CHSY3","CHPF","CHPF2",
 U87.subset <- as.data.frame(U87.dat) %>% 
   dplyr::select(c("SYMBOL" | contains(samples))) %>% 
   tibble::rownames_to_column("PROBEID") %>% 
-  dplyr::filter(PROBEID %in% c(U87.deg$`sel_pH647-control_sel`$ID.ID,
-                                      U87.deg$`acu_pH68-control_acu`$ID.ID,
-                                      U87.deg$`acu_pH64-control_acu`$ID.ID,
-                                      U87.deg$`hypoxia-control_nox`$ID.ID)) %>% 
+  dplyr::filter(PROBEID %in% c(U87.deg$`sel_pH647-control_sel`$PROBEID,
+                               U87.deg$`acu_pH68-control_acu`$PROBEID,
+                               U87.deg$`acu_pH64-control_acu`$PROBEID,
+                               U87.deg$`hypoxia-control_nox`$PROBEID)) %>% 
   dplyr::filter(SYMBOL %in% interest_genes)
+
+U87.subset <- U87.subset[order(desc(rowVars(as.matrix(U87.subset[,-c(1,2)])))),] %>%
+  dplyr::distinct(SYMBOL, .keep_all = T)
 
 U87.subset <- U87.subset %>% 
   tidyr::pivot_longer(cols = !c(SYMBOL,PROBEID), values_to = "expression",

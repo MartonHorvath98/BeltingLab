@@ -1,4 +1,4 @@
-TOTAL.clusters <- do.call(rbind.fill, TOTAL.sets[c(5,6,7,9,13)])
+TOTAL.clusters <- do.call(rbind.fill, TOTAL.sets)
 
 enrichment.list <- list(U3017 = rbind(HGCC.GSEA$U3017$sig_df[,c("ID","core_enrichment")],
                                       HGCC.GO$U3017$sig_df[,c("ID","core_enrichment")]),
@@ -73,7 +73,7 @@ clu <- stats::hclust(stats::as.dist(1 - kappa_mat), method = "complete")
 
 stats::heatmap(kappa_mat, distfun = function(x) stats::as.dist(1 - x), hclustfun = function(x) stats::hclust(x, method = "average")) 
 
-#kmax <- max(nrow(kappa_mat)%/%2, 2)
+kmax <- max(nrow(kappa_mat)%/%2, 2)
 kseq <- c(2:20, seq(50, 200, 50))
 avg_sils <- c()
 
