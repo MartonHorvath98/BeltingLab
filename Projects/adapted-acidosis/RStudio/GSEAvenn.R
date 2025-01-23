@@ -842,6 +842,13 @@ TOTAL.GSEA.vulcano <- list(
   CCLD = rbind(CCLD.GSEA$sig_df[,c("ID","Name", "NES","p.adjust")],
                CCLD.GO$sig_df[,c("ID","Name", "NES","p.adjust")]))
 
+TOTAL.GSEA.vulcano <- lapply(TOTAL.GSEA.vulcano, function(x){
+  return(x %>% 
+           dplyr::mutate(p.adjust = ifelse(p.adjust < 1e-35, yes = 1e-35, no = p.adjust))
+           )
+})
+
+### Extracellular matrix organization
 (TOTAL.ECM.vulcano <- lapply(TOTAL.GSEA.vulcano, function(x){
   plotClusters(.df = x, 
                .pathways = interest_pathways %>% filter(Category == "ECM"))
@@ -855,6 +862,17 @@ sapply(names(TOTAL.ECM.vulcano), function(x){
          width = 12, height = 8,units = "in")
 })
 
+TOTAL.ECM.vulcano$HGCC <- cowplot::plot_grid(
+  TOTAL.ECM.vulcano$U3017, TOTAL.ECM.vulcano$U3047, TOTAL.ECM.vulcano$U3054,
+  byrow = T, nrow = 1, ncol = 3, scale = .9, 
+  margins = c(0.5, 0.5, 0.5, 0.5))
+
+ggsave(file.path(results_dir,date,"plots",
+                 paste("HGCC_combined_ECM_GSEA_Vulcano_plot.svg",sep = "_")),
+       plot = TOTAL.ECM.vulcano$HGCC, bg = "white", device = "svg",
+       width = 20, height = 8, units = "in")
+
+### Hypoxia
 (TOTAL.HYPO.vulcano <- lapply(TOTAL.GSEA.vulcano, function(x){
   plotClusters(.df = x, 
                .pathways = interest_pathways %>% filter(Category == "HYPOXIA"))
@@ -867,6 +885,17 @@ sapply(names(TOTAL.HYPO.vulcano), function(x){
          width = 12, height = 8,units = "in")
 })
 
+TOTAL.HYPO.vulcano$HGCC <- cowplot::plot_grid(
+  TOTAL.HYPO.vulcano$U3017, TOTAL.HYPO.vulcano$U3047, TOTAL.HYPO.vulcano$U3054,
+  byrow = T, nrow = 1, ncol = 3, scale = .9, 
+  margins = c(0.5, 0.5, 0.5, 0.5))
+
+ggsave(file.path(results_dir,date,"plots",
+                 paste("HGCC_combined_Hypoxia_GSEA_Vulcano_plot.svg",sep = "_")),
+       plot = TOTAL.HYPO.vulcano$HGCC, bg = "white", device = "svg",
+       width = 20, height = 8, units = "in")
+
+### TGF-beta signaling pathway
 (TOTAL.TGFb.vulcano <- lapply(TOTAL.GSEA.vulcano, function(x){
   plotClusters(.df = x, 
                .pathways = interest_pathways %>% filter(Category == "TGFb"))
@@ -879,7 +908,17 @@ sapply(names(TOTAL.TGFb.vulcano), function(x){
          width = 12, height = 8,units = "in")
 })
 
+TOTAL.TGFb.vulcano$HGCC <- cowplot::plot_grid(
+  TOTAL.TGFb.vulcano$U3017, TOTAL.TGFb.vulcano$U3047, TOTAL.TGFb.vulcano$U3054,
+  byrow = T, nrow = 1, ncol = 3, scale = .9, 
+  margins = c(0.5, 0.5, 0.5, 0.5))
 
+ggsave(file.path(results_dir,date,"plots",
+                 paste("HGCC_combined_TGFb_GSEA_Vulcano_plot.svg",sep = "_")),
+       plot = TOTAL.TGFb.vulcano$HGCC, bg = "white", device = "svg",
+       width = 20, height = 8, units = "in")
+
+# ---------------------------------   U87   ---------------------------------- #
 U87.GSEA.vulcano <- list(
   U87_CA64 = rbind(U87.GSEA$`sel_pH647-control_sel`$sig_df[,c("ID","Name", "NES","p.adjust")],
                  U87.GO$`sel_pH647-control_sel`$sig_df[,c("ID","Name", "NES","p.adjust")]),
@@ -891,6 +930,13 @@ U87.GSEA.vulcano <- list(
                  U87.GO$`hypoxia-control_nox`$sig_df[,c("ID","Name", "NES","p.adjust")])
 )
 
+U87.GSEA.vulcano <- lapply(U87.GSEA.vulcano, function(x){
+  return(x %>% 
+           dplyr::mutate(p.adjust = ifelse(p.adjust < 1e-35, yes = 1e-35, no = p.adjust))
+  )
+})
+
+### Extracellular matrix organization
 (U87.ECM.vulcano <- lapply(U87.GSEA.vulcano, function(x){
   plotClusters(.df = x, 
                .pathways = interest_pathways %>% filter(Category == "ECM"))
@@ -904,6 +950,7 @@ sapply(names(U87.ECM.vulcano), function(x){
          width = 12, height = 8,units = "in")
 })
 
+### Hypoxia
 (U87.HYPO.vulcano <- lapply(U87.GSEA.vulcano, function(x){
   plotClusters(.df = x, 
                .pathways = interest_pathways %>% filter(Category == "HYPOXIA"))
@@ -916,6 +963,7 @@ sapply(names(U87.HYPO.vulcano), function(x){
          width = 12, height = 8,units = "in")
 })
 
+### TGF-beta signaling pathway
 (U87.TGFb.vulcano <- lapply(U87.GSEA.vulcano, function(x){
   plotClusters(.df = x, 
                .pathways = interest_pathways %>% filter(Category == "TGFb"))

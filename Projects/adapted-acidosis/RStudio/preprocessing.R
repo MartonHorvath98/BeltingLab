@@ -1,4 +1,4 @@
-# Created: 2024 05 21 ; Last Modified: 2025 01 20
+# Created: 2024 05 21 ; Last Modified: 2025 01 23
 # KGO & MH
 ################################################################################
 #                              Data Processing                                 #
@@ -169,133 +169,36 @@ sapply(names(U87.deg), function(x){
 })
 
 
-#######    PANC1 AA vs NA (Clariom D Human Pico) Affymetrix
-library(affycoretools)
-library(oligo)
-library(clariomdhumanprobeset.db)
-library(clariomdhumantranscriptcluster.db)
-library(pd.clariom.d.human)
-library(openxlsx)
-library(limma)
+# ---------------------------------------------------------------------------- #
+# -   PANC1 Chronic Acidosis AA vs NA (Clariom D Human Pico) Affymetrix      - #
+# ---------------------------------------------------------------------------- #
+data_dir <- "./data/raw/PANC1_BEA21P006_affy/"
+PANC1.dat <- read.celfiles(list.celfiles(data_dir, full.names = TRUE))
 
-setwd("./RawData/PANC1_BEA21P006_affy/")
-dat <- read.celfiles(list.celfiles())
-setwd("E:/Lab/Collabs/Anna/Analysis2024")
+# Transcript filtering
+PANC1.expr <- normalizeTranscript(PANC1.dat, clariomdhumantranscriptcluster.db)
 
-######## Transcript filtering
-#rma does background normalization, log2 transformation and quantile normalization
-transcript.eset=rma(dat,target="core")
+# Perform DEG analysis
+# Compare cell lines
+PANC1.deg <- limmaDEA(.data = PANC1.expr,
+                     .design = c("PANC1_NA", "PANC1_NA","PANC1_NA",
+                                 "PANC1_AA", "PANC1_AA", "PANC1_AA"),
+                     .contrast = c("tPANC1_AA - tPANC1_NA")) 
 
-# annotating using info assembled by the Bioconductor Core Team
-transcript.eset <- annotateEset(transcript.eset, clariomdhumantranscriptcluster.db)
-
-#Get expression matrix and add annotation
-PANC1_AAvsNA<- as.data.frame(exprs(transcript.eset))
-PANC1_AAvsNA$PROBEID<- rownames(PANC1_AAvsNA)
-
-annot_transc<- transcript.eset@featureData@data
-
-PANC1_AAvsNA<- merge(PANC1_AAvsNA, annot_transc, by="PROBEID")
-
-#Filter the gene expression to contain only values with genesymbol
-idx<- which(is.na(PANC1_AAvsNA$SYMBOL))
-PANC1_AAvsNA<- PANC1_AAvsNA[-idx,]
-
-
-###### DEA
-# Do differential expression to all samples
-gexp<- PANC1_AAvsNA[,1:7]
-rownames(gexp)<- PANC1_AAvsNA$PROBEID
-gexp<-gexp[,-1]
-
-t <- factor(c("PANC1_NA", "PANC1_NA","PANC1_NA",
-              "PANC1_AA", "PANC1_AA", "PANC1_AA"))
-design <- model.matrix(~0+t)
-
-library(limma)
-fit <- lmFit(gexp,design)
-fit$genes$ID <- rownames(gexp)
-fit$genes$Symbol <- PANC1_AAvsNA$SYMBOL
-fit$genes$Entrez <- PANC1_AAvsNA$ENTREZID
-
-#--- Contrasts of control groups against tested groups
-contrasts <- makeContrasts(tPANC1_AA - tPANC1_NA,
-                           levels=design) 
-
-ct.fit <- eBayes(contrasts.fit(fit, contrasts))
-res.fit<-decideTests(ct.fit,method="global", adjust.method="BH", p.value=0.05)
-
-#--- Make deg table with getfitlimma
-source("./Scripts/getFitLimma.R")
-deg.limma<-getFitLimma(ct.fit,res.fit)
-
-PANC1_AAvsNA_deg<-merge(PANC1_AAvsNA[,c(1,8,10,9,2:7)], deg.limma[,c(1,4:6,10)], by.x="PROBEID", by.y="Genes.ID")
-
-PANC1_AAvsNA_deg<-PANC1_AAvsNA_deg[,c(1:4,11:14,5:10)]
-
-rm(list = setdiff(ls(), c("PANC1_AAvsNA_deg")))
-
-#remove duplicates based on the probe with highest abs FC
-symbols<- as.character(unique(PANC1_AAvsNA_deg[which(duplicated(PANC1_AAvsNA_deg$SYMBOL)),"SYMBOL"]))
-
-result<- NULL
-for (i in 1:length(symbols)) {
-  gene<- symbols[i]
-  mat<- PANC1_AAvsNA_deg[which(PANC1_AAvsNA_deg$SYMBOL==gene),]
-  mat<-mat[order(abs(mat$logFC), decreasing = TRUE),]
-  result<- rbind(result, mat[1,])
-}
-
-PANC1_AAvsNA_deg<- PANC1_AAvsNA_deg[-which(PANC1_AAvsNA_deg$SYMBOL%in%symbols),]
-PANC1_AAvsNA_deg<- rbind(PANC1_AAvsNA_deg, result)
+PANC1.deg <- removeDuplicates(PANC1.deg[[1]], .column = "t", .symbol = "ID.Symbol")
 
 ####### Check how many up and down- regulated genes
-length(which(PANC1_AAvsNA_deg$logFC>=0.5)) # 1040
-length(which(PANC1_AAvsNA_deg$logFC<=(-0.5))) # 661
+length(which(PANC1.deg$logFC >= 0.5)) # 1038
+length(which(PANC1.deg$logFC <= (-0.5))) # 659
 
-#Save RDatas
-save(PANC1_AAvsNA_deg, file = "./RData/PANC1_AAvsNA_processedData.RData")
-#write.xlsx(PANC1_AAvsNA_deg, file = "./ProcessedData/PANC1_AAvsNA_processedData.xlsx")
-
-
-
+# Save RData
+save(PANC1.deg, file = "./RData/PANC1.deg_AAvsNA_processedData.RData")
+# Save file
+write.xlsx(PANC1.deg, file = paste0("./data/processed/PANC1_AAvsNA_processedData.xlsx"))
 
 
-################ IvyGap downloaded from GlioVis on 2024 05 24
-# RNA-seq. The normalized count reads from the pre-processed data (sequence allignment and transcript abundance estimation) were log2 transformed after adding a 0.5 pseudocount (to avoid infinite value upon log transformation).
-# Load Ivy Gap data
-IvyGap<- read.table("./RawData/IvyGap/2024-05-24_Ivy_GAP_expression.txt", header=TRUE)
-# Load clinical data
-clin_IvyGap<-read.table("./RawData/IvyGap/2024-05-24_Ivy_GAP_pheno.txt", header=TRUE)
-
-# Get only primary tumors and samples that have location stated. Ivy gapd does not have IDH status information
-# Out of 270 samples, 122 are primary GBM with Histology status 
-Prim_IG<- clin_IvyGap[which(clin_IvyGap$Recurrence=="Primary" & !is.na(clin_IvyGap$Histology)),]
-sel_IvyGap<-merge(Prim_IG, IvyGap, by="Sample")
-
-#Save RDatas
-save(clin_IvyGap, IvyGap, Prim_IG, sel_IvyGap, file = "./ProcessedData/IvyGap_processedData.RData")
 
 
-# Save as xlsx
-Samples<-IvyGap$Sample
 
-IvyGap<-IvyGap[,-1]
-IvyGap<-t(IvyGap)
-IvyGap<-as.data.frame(IvyGap)
-colnames(IvyGap)<-Samples
-
-
-Samples<-sel_IvyGap$Sample
-
-sel_IvyGap<-sel_IvyGap[,c(18:ncol(sel_IvyGap))]
-sel_IvyGap<-t(sel_IvyGap)
-sel_IvyGap<-as.data.frame(sel_IvyGap)
-colnames(sel_IvyGap)<-Samples
-
-
-list_of_datasets <- list("PrimaryGBM_gexp" = sel_IvyGap, "PrimaryGBM_clinical" = Prim_IG,
-                         "FullDataset_gexp" = IvyGap, "FullDataset_clinical" = clin_IvyGap)
-write.xlsx(list_of_datasets, file = "./ProcessedData/IvyGap.xlsx", colNames=TRUE, rowNames=TRUE)
 
 
