@@ -598,19 +598,40 @@ plotGeneRank <- function(.df, .x, .color, .facet, .palette){
          + scale_x_continuous(expand = c(0, 0)) 
          + scale_y_continuous(expand = c(0, 0)) 
          + scale_color_manual(values = .palette) 
-         + facet_grid(facet, scales = "free_y") 
+         + facet_grid(facet, scales = "free_y", switch = "y",
+                      labeller = labeller(.default = Hmisc::capitalize)) 
          + theme(panel.grid.major = element_blank(), 
                  panel.grid.minor = element_blank(), 
                  panel.grid.major.y = element_blank(),
                  panel.grid.minor.y = element_blank(), 
                  axis.ticks.y = element_blank(), 
                  axis.text.y = element_blank(),
-                 strip.text = element_blank(), 
+                 strip.placement = "outside",
+                 strip.background = element_blank(),
+                 strip.text.y.left = element_text(angle = 0, hjust = 0,
+                                                  colour = "grey25", size = 14), 
                  axis.text.x = element_text(colour = "black", size = 14))
   )
 }
 
-plotClusters <- function(.df, .pathways, .clusters, .palette){
+getEnrichmentTable <- function(.df, .order, .name){
+  return(.df %>%
+    dplyr::arrange(.order) %>% 
+    tibble::remove_rownames() %>% 
+    tibble::column_to_rownames(.name) %>%
+    dplyr::mutate(
+      NES = round(NES, 4),
+      FDR = round(p.adjust, 4)) %>%
+    dplyr::mutate(FDR = case_when(
+      FDR < 0.001 ~ paste("<0.001", "(***)"),
+      FDR < 0.01 ~ paste(as.character(FDR), "(**)"),
+      FDR < 0.05 ~ paste(as.character(FDR), "(*)"),
+      TRUE ~ as.character(FDR),
+    )) %>% 
+    dplyr::select(c(NES, FDR)))
+}
+
+plotClusters <- function(.df, .pathways){
   df <- .df %>% 
     dplyr::left_join(., .pathways, by = c("ID","Name")) %>%
     dplyr::mutate(Category = as.factor(Category))
@@ -619,31 +640,37 @@ plotClusters <- function(.df, .pathways, .clusters, .palette){
   
   return(
     ggplot() 
-    + geom_point(data = df, aes(x = NES, y = -log10(FDR)), 
-                 size = 2.5, alpha = 0.05) 
+    + geom_point(data = df, aes(x = NES, y = -log10(p.adjust)), 
+                 size = 5, shape = 21, color = "black", fill = "grey80", alpha = 0.1) 
     # Visualize clusters of interest
     + geom_point(data = subset(df, !is.na(Category) & Category == facet_var),
-                 aes(x = NES, y = -log10(FDR), fill = Category), 
-                 shape = 21, color = "black", size = 2.5, alpha = 0.5)
+                 aes(x = NES, y = -log10(p.adjust), fill = Category), 
+                 shape = 21, color = "black", size = 5, alpha = 0.5)
     # Label the terms of interest
-    + geom_label_repel(data = subset(df, ID %in% .pathways$ID & Category == facet_var),
-                      aes(x = NES, y = -log10(FDR), color = Category, 
-                          label = str_wrap(gsub("_"," ",Name), 25)), 
-                      fontface = "bold", size = 3)
+    + geom_label_repel(
+      data = subset(df, ID %in% .pathways$ID & Category == facet_var),
+      aes(x = NES, y = -log10(p.adjust), color = Category, 
+          label = str_wrap(gsub("_"," ",Name), 25)),
+      size = 5, max.overlaps = 100, min.segment.length = 0,
+      arrow = arrow(type = "closed", angle = 15, length = unit(0.1,"in")),
+      box.padding = unit(1.5,"in"), point.padding = unit(0.1,"in"),
+      force = 1, direction = "both")
     + scale_color_manual(values = c("ECM"="#7E03A8FF",
-                                    "HYPOXIA"="#E56B5DFF",
-                                    "TGFb"="#FDC328FF"))
+                                    "HYPOXIA"="#F00000FF",
+                                    "TGFb"="#09BFF9FF"))
     + scale_fill_manual(values = c("ECM"="#7E03A8FF",
-                                   "HYPOXIA"="#E56B5DFF",
-                                   "TGFb"="#FDC328FF"))
-    + facet_grid(~facet_var)
+                                   "HYPOXIA"="#F00000FF",
+                                   "TGFb"="#09BFF9FF"))
+    + facet_grid(~facet_var, scales = "free_x")
     + labs(x = expression('NES'),
            y = expression(paste(log[10], italic('FDR'))))
     + scale_x_continuous(expand = expansion(0.2))
     + theme_minimal() 
     + theme(axis.title = element_text(size = 14), 
             axis.text = element_text(size = 14, color = "#888888"),
-            strip.text = element_text(size = 14),
+            strip.text = element_blank(),
+            # Controls spacing between facets
+            panel.spacing = unit(5, "lines"),
             legend.position = 'none'))
 }
 
