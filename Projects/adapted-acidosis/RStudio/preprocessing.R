@@ -101,30 +101,30 @@ U87.dat <- read.ilmn(files=file.path(data_dir, "Sample_Probe_Summary.txt"),
 
 samples <- c(
   # Chronic acidosis
-  "200118400068_I", #13U87selctrlpH74 - Selection control pH 7.4
-  "200118400035_I", #14U87selctrlpH74 - Selection control pH 7.4
-  "200118400035_D", #15U87selctrlpH74 - Selection control pH 7.4
-  "200118400035_K", #10U87selpH647 - Selection pH 6.4
-  "200118400035_G", #11U87selpH647 - Selection pH 6.4
-  "200118400035_F", #12U87selpH647 - Selection pH 6.4
+  "200118400068_I" = "control_sel", #13U87selctrlpH74 - Selection control pH 7.4
+  "200118400035_I" = "control_sel", #14U87selctrlpH74 - Selection control pH 7.4
+  "200118400035_D" = "control_sel", #15U87selctrlpH74 - Selection control pH 7.4
+  "200118400035_K" = "sel_pH647", #10U87selpH647 - Selection pH 6.4
+  "200118400035_G" = "sel_pH647", #11U87selpH647 - Selection pH 6.4
+  "200118400035_F" = "sel_pH647", #12U87selpH647 - Selection pH 6.4
   # Acute acidosis
-  "200118400068_K", #7U87aactrl74 - Acute acidosis control pH 7.4
-  "200118400068_D", #8U87aactrl74 - Acute acidosis control pH 7.4
-  "200118400068_A", #9U87aactrl74 - Acute acidosis control pH 7.4
-  "200118400068_C", #4U87aapH68 - Acute acidosis pH 6.8
-  "200118400068_G", #5U87aapH68 - Acute acidosis pH 6.8
-  "200118400033_E", #6U87aapH68 - Acute acidosis pH 6.8
-  "200118400033_B", #1U87aapH64 - Acute acidosis pH 6.4
-  "200118400068_B", #2U87aapH64 - Acute acidosis pH 6.4
-  "200118400035_B", #3U87aapH64 - Acute acidosis pH 6.4
+  "200118400068_K" = "control_acu", #7U87aactrl74 - Acute acidosis control pH 7.4
+  "200118400068_D" = "control_acu", #8U87aactrl74 - Acute acidosis control pH 7.4
+  "200118400068_A" = "control_acu", #9U87aactrl74 - Acute acidosis control pH 7.4
+  "200118400068_C" = "acu_pH68", #4U87aapH68 - Acute acidosis pH 6.8
+  "200118400068_G" = "acu_pH68", #5U87aapH68 - Acute acidosis pH 6.8
+  "200118400033_E" = "acu_pH68", #6U87aapH68 - Acute acidosis pH 6.8
+  "200118400033_B" = "acu_pH64", #1U87aapH64 - Acute acidosis pH 6.4
+  "200118400068_B" = "acu_pH64", #2U87aapH64 - Acute acidosis pH 6.4
+  "200118400035_B" = "acu_pH64", #3U87aapH64 - Acute acidosis pH 6.4
   # Normoxia
-  "200118400033_G", #nox3 - atmospheric O2 (21%) control
-  "200118400035_L", #nox2 - atmospheric O2 (21%) control
-  "200118400033_H", #nox1 - atmospheric O2 (21%) control
+  "200118400033_G" = "control_nox", #nox3 - atmospheric O2 (21%) control
+  "200118400035_L" = "control_nox", #nox2 - atmospheric O2 (21%) control
+  "200118400033_H" = "control_nox", #nox1 - atmospheric O2 (21%) control
   # Hypoxia
-  "200118400035_E", #hox3 - 1% O2
-  "200118400035_H", #hox2 - 1% O2
-  "200118400033_I") #hox1 - 1% O2
+  "200118400035_E" = "hypoxia", #hox3 - 1% O2
+  "200118400035_H" = "hypoxia", #hox2 - 1% O2
+  "200118400033_I" = "hypoxia") #hox1 - 1% O2
 
 # Connect to DB
 dbCon=org.Hs.eg_dbconn()
@@ -136,21 +136,15 @@ sqlQuery='SELECT * FROM alias, gene_info WHERE alias._id == gene_info._id;'
 aliasSymbol=dbGetQuery(dbCon, sqlQuery)
 
 #normalization and background correction
-U87.expr <- normalizeIllumina(U87.dat, .dbconn = aliasSymbol, .samples = samples)
+U87.expr <- normalizeIllumina(U87.dat, .dbconn = aliasSymbol, .samples = names(samples))
 
 #Perform DEG analysis
 U87.deg <- limmaDEA(.data = U87.expr,
-                    .design = c("control_sel", "control_sel", "control_sel",
-                                 "sel_pH647", "sel_pH647", "sel_pH647",
-                                 "control_acu", "control_acu", "control_acu",
-                                 "acu_pH68", "acu_pH68", "acu_pH68",
-                                 "acu_pH64", "acu_pH64", "acu_pH64",
-                                 "control_nox", "control_nox", "control_nox",
-                                 "hypoxia", "hypoxia", "hypoxia"),
-                     .contrast = c("tsel_pH647-tcontrol_sel",
-                                   "tacu_pH68-tcontrol_acu",
-                                   "tacu_pH64-tcontrol_acu",
-                                   "thypoxia-tcontrol_nox"))
+                    .design = samples,
+                    .contrast = c("sel_pH647-control_sel",
+                                  "acu_pH68-control_acu",
+                                  "acu_pH64-control_acu",
+                                  "hypoxia-control_nox"))
 
 # Remove duplicate IDs
 names(U87.deg) <- c("sel_pH647-control_sel", "acu_pH68-control_acu",

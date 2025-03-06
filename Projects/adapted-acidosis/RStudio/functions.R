@@ -32,7 +32,7 @@ removeDuplicates <- function(.data, .column, .symbol){
   # Remove duplicates
   data <- data[!duplicated(data[[.symbol]]),]
   return(data)
-
+  
 }
 
 # III.) Differential expression analysis with Limma
@@ -44,6 +44,7 @@ limmaDEA <- function(.data, .design, .contrast){
   # Create a design matrix
   t <- as.factor(.design)
   design <- model.matrix(~0 + t)
+  colnames(design) <- levels(t)
   # Fit the linear model
   fit <- lmFit(mat, design)
   fit$genes$ID <- rownames(mat)
@@ -52,7 +53,7 @@ limmaDEA <- function(.data, .design, .contrast){
   
   # Fit the contrasts
   
-  contrast.matrix <- makeContrasts(contrasts = .contrast, levels = design)
+  contrast.matrix <- makeContrasts(contrasts = .contrast, levels = t)
   fit2 <- contrasts.fit(fit, contrast.matrix)
   fit2 <- eBayes(fit2)
   
@@ -73,7 +74,7 @@ tryMapID <- function(ID, inp, outp){
   tryCatch(
     {
       suppressWarnings(
-      mapIds(org.Hs.eg.db, keys = ID, column = outp, keytype = inp, multiVals = "first")
+        mapIds(org.Hs.eg.db, keys = ID, column = outp, keytype = inp, multiVals = "first")
       )
     },
     error = function(e) {
@@ -96,9 +97,9 @@ switchAlias <- function(dbconn, ID){
 
 normalizeIllumina <- function(.df, .dbconn, .samples = colnames(.df$E)){
   x <- illuminaHumanv4ENTREZID
-
+  
   #normalization and background correction
-  df <- neqc(.df)
+    df <- neqc(.df)
   # keep only selected samples
   df <- df[, .samples]
   #keep probes that are expressed in at least three arrays according to a detection p-values of 5%:
@@ -128,7 +129,7 @@ normalizeIllumina <- function(.df, .dbconn, .samples = colnames(.df$E)){
     dplyr::mutate(
       ENTREZID = ifelse(
         ENTREZID == "NA" | is.na(ENTREZID), no = ENTREZID, yes = entrez[[SYMBOL]]))
-
+  
   # add annotation to the expression matrix
   df <- as.data.frame(df$E)
   df$PROBEID <- rownames(df)
@@ -170,9 +171,9 @@ plot_pca <- function(data, .groups, .labels = NULL, .values = NULL,
     plot <- plot + 
       # add confidence ellipses
       stat_ellipse(geom = "polygon", 
-                     aes(color =  .ellipse, fill =  .ellipse), 
-                     type = "norm", level = 0.68, alpha = .3, 
-                     linetype = 2, show.legend = F)
+                   aes(color =  .ellipse, fill =  .ellipse), 
+                   type = "norm", level = 0.68, alpha = .3, 
+                   linetype = 2, show.legend = F)
   }
   return(plot)
 }
@@ -184,51 +185,56 @@ plot_pca <- function(data, .groups, .labels = NULL, .values = NULL,
 # I.) SET SIGNIFICANCE LEVELS
 get_significance <- function(.df){
   return(.df %>% 
-             # Rename data frame columns to make sense
-             # setNames(., c("symbol", "log2FoldChange", "pvalue", "padj")) %>% 
-             # Add a columns...
-             dplyr::mutate(
-               # ... for significance levels using the thresholds:
-               #                            p-adj < 0.05, abs(log2FC) > 0.5
-               significance = dplyr::case_when(
-                 abs(log2FoldChange) > 0.5 & padj > 0.05 ~ 'log2FoldChange',
-                 abs(log2FoldChange) < 0.5 & padj < 0.05 ~ 'Log10P',
-                 log2FoldChange < (-1)*0.5 & padj < 0.05 ~ 'Signif. down-regulated',
-                 log2FoldChange > 0.5 & padj < 0.05 ~ 'Signif. up-regulated',
-                 T ~ 'NS')) %>% 
-             dplyr::filter(complete.cases(.)))
+           # Rename data frame columns to make sense
+           # setNames(., c("symbol", "log2FoldChange", "pvalue", "padj")) %>% 
+           # Add a columns...
+           dplyr::mutate(
+             # ... for significance levels using the thresholds:
+             #                            p-adj < 0.05, abs(log2FC) > 0.5
+             significance = dplyr::case_when(
+               abs(log2FoldChange) > 0.5 & padj > 0.05 ~ 'log2FoldChange',
+               abs(log2FoldChange) < 0.5 & padj < 0.05 ~ 'Log10P',
+               log2FoldChange < (-1)*0.5 & padj < 0.05 ~ 'Signif. down-regulated',
+               log2FoldChange > 0.5 & padj < 0.05 ~ 'Signif. up-regulated',
+               T ~ 'NS')) %>% 
+           dplyr::filter(complete.cases(.)))
 }
 
-plot_vulcan <- function(.data){
-  return(
-    ggplot(data = na.omit(.data), 
-         aes(x = log2FoldChange, y = -log10(padj), colour = significance))
-    + geom_point(mapping = aes(), inherit.aes = T, size = 2.5, alpha = 0.35)
-    + scale_color_manual(values = c("NS" = '#c1c1c1',
+plot_vulcan <- function(.data, label = T){
+  plot = ggplot(data = na.omit(.data), 
+                aes(x = log2FoldChange, y = -log10(padj), colour = significance)) + 
+    geom_point(mapping = aes(), inherit.aes = T, size = 2.5, alpha = 0.35) + 
+    scale_color_manual(values = c("NS" = '#c1c1c1',
                                     "Log10P" = '#363636',
                                     "Log2FoldChange" = '#767676',
                                     "Signif. up-regulated" = '#841f27',
                                     "Signif. down-regulated" = '#000f64'),
-                         name = "Significance")
-    + labs(x = expression(paste(log[2], 'FoldChange')),
-           y = expression(paste(log[10], italic('FDR'))))
-    + scale_x_continuous(expand = expansion(0.2))
+                         name = "Significance") + 
+    labs(x = expression(paste(log[2], 'FoldChange')),
+           y = expression(paste(log[10], italic('FDR')))) +
+    scale_x_continuous(expand = expansion(0.2)) + 
     # Visualize log2FC threshold
-    + geom_vline(xintercept = c(-0.5, 0.5), linetype = 'dotted', size = 1)
+    geom_vline(xintercept = c(-0.5, 0.5), linetype = 'dotted', size = 1) +
     # Visualize adjusted p-value threshold
-    + geom_hline(yintercept = -log10(0.05), linetype = 'dotted', size = 1)
-    # Add labels for significantly up- or down-regulated genes
-    + geom_text(data = subset(.data,
-                              significance %in% c("Signif. up-regulated", 
-                                                  "Signif. down-regulated")),
-                hjust = 0, vjust = 1.5, colour = 'black', position = 'identity', 
-                show.legend = F, check_overlap = T,
-                label = subset(.data,
-                               significance %in% c("Signif. up-regulated", 
-                                                   "Signif. down-regulated"))[,"Symbol"])
-    + theme(axis.title = element_text(size = 14), 
+    geom_hline(yintercept = -log10(0.05), linetype = 'dotted', size = 1) +
+    theme(axis.title = element_text(size = 14), 
             axis.text = element_text(size = 14), 
-            legend.position = 'none'))
+            legend.position = 'none')
+  
+  if (label == T){
+    return(plot +
+      # Add labels for significantly up- or down-regulated genes
+      geom_text(data = subset(.data,
+                                significance %in% c("Signif. up-regulated", 
+                                                    "Signif. down-regulated")),
+                  hjust = 0, vjust = 1.5, colour = 'black', position = 'identity', 
+                  show.legend = F, check_overlap = T,
+                  label = subset(.data,
+                                 significance %in% c("Signif. up-regulated", 
+                                                     "Signif. down-regulated"))[,"Symbol"]))
+  } else {
+    return(plot)
+  }
 }
 
 # ---------------------------------------------------------------------- #
@@ -296,28 +302,28 @@ plot_venn <- function(.data, .sets, .labels){
           + theme_void()
           # Add invisible gene sets to be able to add the legend to the plot
           + geom_point(aes(x = x, y = y, colour = Trend), 
-               alpha = 0.01, size = 1)
+                       alpha = 0.01, size = 1)
           + scale_color_manual(
             labels = c("incoherent activation", "down-regulated", "up-regulated"),
             values = c("Change" = "orange", "DOWN" = "blue", "UP" = "darkred"),
             guide = guide_legend(override.aes = c(alpha = 1, size = 5)),
             aesthetics = "colour",
-            ) 
+          ) 
           # --- SETS: BORDERS, FILL, LABELS --- #
           # Add the set borders of the Venn diagram
           + geom_venn_region(.data, sets =  .sets, 
-                     alpha = 0.3, show.legend = F) 
+                             alpha = 0.3, show.legend = F) 
           + geom_venn_circle(.data, sets =  .sets,
-                     size = .5)
+                             size = .5)
           # Fill every set white
           + scale_fill_venn_mix(.data, sets =  .sets,
-                        guide='none', highlight = intersection,
-                        inactive_color='NA', active_color = 'NA')
+                                guide='none', highlight = intersection,
+                                inactive_color='NA', active_color = 'NA')
           # Add the names of the sets
           + geom_venn_label_set(.data, outwards_adjust = 2,
-                        sets = .sets,
-                        fill = alpha("black", .35), 
-                        aes(label =  .labels))
+                                sets = .sets,
+                                fill = alpha("black", .35), 
+                                aes(label =  .labels))
           # --- DECORATE SETS; GENE EXPRESSION TRENDS --- #
           # add labels with numbers of incoherently activated genes
           + geom_venn_label_region(
@@ -342,7 +348,7 @@ plot_venn <- function(.data, .sets, .labels){
             legend.title = element_text(size = 12),
             legend.text = element_text(size = 12))
   ))
-  }
+}
 
 # ---------------------------------------------------------------------- #
 # Function - PATHWAY ANALYSES                                            #
@@ -404,7 +410,7 @@ extract_ora_results <- function(.ora, .db){
   df$ID = .db[match(ids, .db$gs_name),][["gs_exact_source"]]
   df$Description = .db[match(ids, .db$gs_name),][["gs_description"]]
   df$Database = database
-    
+  
   # extract significant results: adjusted p-value < 0.05
   sig_df <- df %>% 
     dplyr::filter(p.adjust < 0.1)
@@ -429,7 +435,7 @@ run_gsea <- function(.geneset, .terms){
       .terms,
       gs_name,
       human_entrez_gene
-  ))
+    ))
   res <- setReadable(res, org.Hs.eg.db, keyType = "ENTREZID")
   
   # extract data frame
@@ -449,11 +455,11 @@ extract_gsea_results <- function(.gsea, .db){
     dplyr::mutate(Direction = dplyr::case_when(NES > 0 ~ '+',
                                                NES < 0 ~ '-'))
   df <- df %>%
-      dplyr::mutate(
-        Database = sapply(stringr::str_split(ID, "_"), 
-                          function(x) return(x[1])),
-        Name = sapply(stringr::str_split(ID, "_"), 
-                      function(x) return(paste(x[-1], collapse = "_"))))
+    dplyr::mutate(
+      Database = sapply(stringr::str_split(ID, "_"), 
+                        function(x) return(x[1])),
+      Name = sapply(stringr::str_split(ID, "_"), 
+                    function(x) return(paste(x[-1], collapse = "_"))))
   
   # add the pathway IDs and descriptions to the data frame
   ids <- df$ID
@@ -582,7 +588,7 @@ plotRunningScore <- function(.df, .x, .y, .color, .palette){
                  axis.text.x = element_blank(),
                  axis.ticks.x = element_blank(),
                  axis.text.y = element_text(colour = "black", size = 14))
-         )
+  )
 }
 
 plotGeneRank <- function(.df, .x, .color, .facet, .palette){
@@ -616,36 +622,309 @@ plotGeneRank <- function(.df, .x, .color, .facet, .palette){
 
 getEnrichmentTable <- function(.df, .order, .name){
   return(.df %>%
-    dplyr::arrange(.order) %>% 
-    tibble::remove_rownames() %>% 
-    tibble::column_to_rownames(.name) %>%
-    dplyr::mutate(
-      NES = round(NES, 4),
-      FDR = round(p.adjust, 4)) %>%
-    dplyr::mutate(FDR = case_when(
-      FDR < 0.001 ~ paste("<0.001", "(***)"),
-      FDR < 0.01 ~ paste(as.character(FDR), "(**)"),
-      FDR < 0.05 ~ paste(as.character(FDR), "(*)"),
-      TRUE ~ as.character(FDR),
-    )) %>% 
-    dplyr::select(c(NES, FDR)))
+           dplyr::arrange(.order) %>% 
+           tibble::remove_rownames() %>% 
+           tibble::column_to_rownames(.name) %>%
+           dplyr::mutate(
+             NES = round(NES, 4),
+             FDR = round(p.adjust, 4)) %>%
+           dplyr::mutate(FDR = case_when(
+             FDR < 0.001 ~ paste("<0.001", "(***)"),
+             FDR < 0.01 ~ paste(as.character(FDR), "(**)"),
+             FDR < 0.05 ~ paste(as.character(FDR), "(*)"),
+             TRUE ~ as.character(FDR),
+           )) %>% 
+           dplyr::select(c(NES, FDR)))
 }
 
+
+
+# ---------------------------------------------------------------------- #
+# Function - Cluster analysis                                            #
+# ---------------------------------------------------------------------- #
+# a function calculating the Cohen's Kappa coefficient between a list of gene sets
+cohen_kappa <- function(.list){
+  N <- length(.list)
+  kappa_mat <- matrix(0, nrow = N, ncol = N,
+                      dimnames = list(names(.list), names(.list)))
+  diag(kappa_mat) <- 1
+  
+  total <- length(unique(unlist(.list)))
+  
+  for (i in 1:(N - 1)) {
+    for (j in (i + 1):N) {
+      genes_i <- .list[[i]]
+      genes_j <- .list[[j]]
+      both <- length(intersect(genes_i, genes_j))
+      term_i <- length(base::setdiff(genes_i, genes_j))
+      term_j <- length(base::setdiff(genes_j, genes_i))
+      no_terms <- total - sum(both, term_i, term_j)
+      observed <- (both + no_terms)/total
+      chance <- (both + term_i) * (both + term_j)
+      chance <- chance + (term_j + no_terms) * (term_i + 
+                                                  no_terms)
+      chance <- chance/total^2
+      kappa_mat[j, i] <- kappa_mat[i, j] <- (observed - 
+                                               chance)/(1 - chance)
+    }}
+  return(kappa_mat)
+}
+
+# A function to create a network graph of gene sets based on the Cohen's Kappa coefficient
+# then cluster the network based on interconnectivity using Louvain algorithm
+get_cluster <- function(.df, .matrix, .column, .threshold = 0.25){
+  # extract the list of enriched gene sets 
+  genes <- split(strsplit(.df[["core_enrichment"]],"/"), .df[["ID"]])
+  
+  # subset the cohen's matrix for the gene sets of interest
+  similarity.matrix <- .matrix[.df[['ID']], .df[['ID']]]
+  
+  # create an adjacency matrix based on the similarity matrix
+  adjacency.matrix <- similarity.matrix > .threshold
+  
+  set.seed(42)
+  # create a network graph from the adjacency matrix
+  graph <- graph_from_adjacency_matrix(adjacency.matrix, mode = "undirected", diag = F)
+  
+  # annotate the nodes of the graph with the enrichment results
+  V(graph)$Name <- .df$Name
+  V(graph)$NES <- .df$NES
+  V(graph)$geneRatio <- .df$geneRatio
+  
+  # Community detection (Louvain algorithm)
+  clusters <- cluster_louvain(graph)
+  # annotate nodes with cluster membership
+  V(graph)$cluster <- membership(clusters)
+  
+  # extract cluster information
+  cluster_summary <- data.frame(
+    ID = names(V(graph)),
+    cluster = as.factor(V(graph)$cluster))
+  
+  cluster_summary <- distinct(cluster_summary, .keep_all = T)
+  
+  df = .df %>% 
+    dplyr::inner_join(., cluster_summary, by = "ID")
+  
+  return(list(graph = graph, df = df))
+}
+
+get_cluster_representative <- function(.cluster, .degs){
+  # add gene expression values to the clusters
+  linkage <- .cluster %>% 
+    dplyr::select(ID, Name, core_enrichment, cluster) %>%
+    tidyr::separate_rows(core_enrichment, sep = "/")
+  
+  linkage$logFC = .degs$log2FoldChange[match(linkage$core_enrichment, .degs$Symbol)]
+  linkage$padj = .degs$padj[match(linkage$core_enrichment, .degs$Symbol)]
+  
+  # calculate normalized term weight
+  linkage$weight = abs(linkage$logFC)*(-log10(linkage$padj))
+  linkage$weight = linkage$weight/max(linkage$weight, na.rm = T)
+  
+  linkage = linkage %>% 
+    dplyr::select(c("core_enrichment", "ID", "weight", "cluster")) %>%
+    setNames(.,c("node1", "node2", "weight", "cluster")) %>% 
+    as.data.frame(.)
+  
+  # create a network visualization of gene and GO-term relationships
+  net <- graph_from_data_frame(linkage)
+  net <- igraph::simplify(net, remove.multiple = F, remove.loops = T)
+  
+  # calculate hub score of each gene
+  hs <-  igraph::hub_score(net, scale = T, weights = linkage$weight)$vector
+  
+  # summarize gene hub scores, to determine the final weight of each GO term
+  linkage$geneRatio = .cluster$geneRatio[match(linkage$node2, .cluster$ID)]
+  
+  linkage <- linkage %>%
+    dplyr::mutate(hub_score = geneRatio * hs[match(node1, names(hs))]) %>% 
+    dplyr::rename(geneID = node1, ID = node2) %>% 
+    dplyr::group_by(ID, cluster) %>%
+    dplyr::summarise(core_enrichment = paste(geneID, collapse = "/"),
+                     hub_score = sum(hub_score, na.rm = T))
+  
+  out_df <- inner_join(.cluster, linkage, by = c("ID","core_enrichment","cluster")) %>%
+    dplyr::mutate(cluster = as.factor(cluster))
+  
+  # select cluster representatives according to calculated weight
+  representative.terms <- out_df %>%
+    dplyr::group_by(cluster) %>%
+    dplyr::arrange(desc(hub_score)) %>%
+    dplyr::slice_head(n = 1) %>%
+    dplyr::pull(ID)
+  
+  out_df <- out_df %>%
+    dplyr::rowwise(.) %>%
+    dplyr::mutate(Representative = ifelse(ID %in% representative.terms, T, F))
+  
+  return(out_df)
+}
+
+filter_graph <- function(.graph, .threshold){
+  cl <- table(V(.graph)$cluster)
+  
+  valid_cl <- which(cl >= .threshold)
+  
+  filtered_vertices <- which(V(.graph)$cluster %in% valid_cl)
+  
+  subgraph <- induced_subgraph(.graph, vids = filtered_vertices)
+  
+  return(subgraph)
+}
+
+plot_network <- function(.net, .layout, .df){
+  edges = as.data.frame(as_edgelist(.net)) %>% 
+    setNames(c("from", "to"))
+  
+  df = data.frame(x = as.data.frame(.layout)[,1],
+                  y = as.data.frame(.layout)[,2],
+                  ID = names(V(.net)),
+                  Name = V(.net)$Description,
+                  cluster = as.factor(V(.net)$cluster),
+                  Representative = V(.net)$Representative,
+                  weight = abs(.df[["hub_score"]][match(names(V(.net)), .df[["ID"]])]),
+                  regulation = ifelse(.df[["NES"]][match(names(V(.net)), .df[["ID"]])] > 0, "UP", "DOWN")
+  )
+  
+  lines = edges %>% 
+    dplyr::mutate(
+      from.x = df$x[match(edges$from, df$ID)],
+      from.y = df$y[match(edges$from, df$ID)],
+      to.x = df$x[match(edges$to, df$ID)],
+      to.y = df$y[match(edges$to, df$ID)]
+    )
+  
+  plot = ggplot() +
+    stat_ellipse(data = df, geom = "polygon", 
+                 aes(x = x, y = y, group = cluster), fill = "grey75", color = "grey15", #color = cluster, fill = cluster), 
+                 type = "norm", level = 0.9,
+                 alpha = .1, linetype = 2, show.legend = F) +
+    geom_segment(data = lines, aes(x = from.x, y = from.y, xend = to.x, yend = to.y),
+                 color = "grey25") +
+    geom_point(data = df, aes(x = x, y = y, size = weight, fill = regulation), #fill = cluster, size = weight),
+               shape = 21, colour = "black") +
+    # geom_point(data = subset(df, Representative), aes(x = x, y = y), #fill = cluster, size = 5),
+    #            shape = 21, colour = "orange", fill = "transparent", stroke = 2, size = 15) +
+    geom_label_repel(data = df, 
+                     aes(x = x, y = y,
+                         label = ifelse(Representative, str_wrap(gsub("_"," ",Name), 30), "")),
+                     max.overlaps = 100, min.segment.length = 0, size = 6,
+                     color = "grey15", fill = "white", show.legend = F,
+                     arrow = arrow(type = "closed", angle = 15, length = unit(0.1,"in")),
+                     box.padding = unit(0.5,"in"), point.padding = unit(0.1,"in"),
+                     force = 1, direction = "both") +
+    scale_fill_manual(values = c("UP" = "darkred", "DOWN" = "blue"),
+                      labels = c("UP" = "Activated", "DOWN" = "Inhibited"),
+                      name = c("Regulation"),
+                      guide = guide_legend(override.aes = c(size = 10))) +
+    scale_size_continuous(guide = "none", range=c(5,15)) +
+    theme_void() +
+    theme(legend.title=element_text(size=28), 
+          legend.text=element_text(size=28),
+          legend.spacing=unit(1.5,"lines"),
+          legend.position = "right")
+  
+  return(plot)
+}
+
+getCircplotData <- function(.cluster, .deg, .interest_cluster, .interest_cluster_genes, .palette){
+  linkage <- .cluster %>% 
+    dplyr::filter(ID %in% names(.interest_cluster)) %>% 
+    dplyr::select(ID, Name, core_enrichment, cluster) %>%
+    tidyr::separate_rows(core_enrichment, sep = "/") %>% 
+    dplyr::left_join(.deg[,c("Symbol","log2FoldChange","padj")],
+                     by = c("core_enrichment" = "Symbol")) %>% 
+    dplyr::rowwise() %>%
+    # ...as a function of the z-score and adjusted p-value
+    dplyr::mutate(weight = abs(log2FoldChange)*(-log10(padj))) %>% 
+    dplyr::ungroup() %>% 
+    dplyr::filter(complete.cases(.)) %>% 
+    dplyr::mutate(weight = as.numeric(weight/max(weight))) %>%
+    dplyr::select(c("core_enrichment", "Name", "weight", "cluster")) %>%
+    setNames(.,c("node1", "node2", "weight", "cluster")) %>%
+    as.data.frame(.)
+  
+  # Transform input data in a adjacency matrix
+  adjacencyData <- with(linkage, table(node1, node2))
+  # circlize::chordDiagram(adjacencyData, transparency = 0.5)
+  
+  
+  # create a network visualization of gene and GO-term relationships
+  net <- graph_from_data_frame(linkage)
+  net <- igraph::simplify(net, remove.multiple = F, remove.loops = T)
+  # calculate hub score of each gene
+  hs <-  igraph::hub_score(net, scale = T, weights = linkage$weight)$vector
+  
+  # summarize gene hub scores, to determine the final weight of each GO term
+  linkage <- linkage %>%
+    dplyr::rowwise(.) %>%
+    dplyr::mutate(hub_score = hs[which(names(hs) == node1)])
+  
+  linkage_wide <- linkage %>% 
+    dplyr::select(node1, node2, hub_score) %>%
+    tidyr::pivot_wider(names_from = node2, values_from = hub_score) %>%
+    dplyr::mutate(across(where(is.numeric), ~ifelse(is.na(.), 0, .))) %>% 
+    tibble::column_to_rownames("node1") %>% 
+    as.matrix()
+  
+  background = unique(linkage$node1[-c(which(linkage$node1 %in% .interest_cluster_genes))])
+  focus = .interest_cluster_genes                   
+  grid.col = c(.palette,
+               setNames(rep("grey", length(background)), background),
+               setNames(rep("red", length(focus)), focus))
+  
+  # Extract sector names
+  from_sectors <- rownames(linkage_wide)
+  to_sectors <- colnames(linkage_wide)
+  
+  border_mat = matrix(NA, nrow = nrow(linkage_wide), ncol = ncol(linkage_wide))
+  border_mat[row.names(linkage_wide) %in% interest_cluster_genes, ] = "red"
+  dimnames(border_mat) = dimnames(linkage_wide)
+  
+  return(list(data.mat = linkage_wide, border.mat = border_mat, grid.col = grid.col))
+}
+
+plotCircplot <- function(.path, .data, .color, .links, .labels){
+  png(.path,
+      width = 25, height = 15, res = 300, units = "in")
+  circos.par(start.degree = 90)
+  circlize::chordDiagram(.data, annotationTrack = "grid",
+                         grid.col = .color, transparency = 0.5,
+                         link.border = .links,
+                         preAllocateTracks = list(track.height = 0.05))
+  
+  # Add labels only to the selected sectors
+  circos.track(track.index = 1, panel.fun = function(x, y) {
+    sector_name <- get.cell.meta.data("sector.index")
+    
+    # Label all 'to' sectors and only selected 'from' sectors
+    if (sector_name %in% .labels) {
+      circos.text(CELL_META$xcenter, CELL_META$ylim[1], CELL_META$sector.index, 
+                  facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.5))
+    }
+  }, bg.border = NA)
+  dev.off()
+  circos.clear()
+}
+
+# plot the enriched cluster on a vulcano plot of pathway's
 plotClusters <- function(.df, .pathways){
   df <- .df %>% 
     dplyr::left_join(., .pathways, by = c("ID","Name")) %>%
     dplyr::mutate(Category = as.factor(Category))
   df <- df %>% 
-      expand_grid(facet_var = unique(df$Category[!is.na(df$Category)]))
+    expand_grid(facet_var = unique(df$Category[!is.na(df$Category)]))
   
   return(
     ggplot() 
-    + geom_point(data = df, aes(x = NES, y = -log10(p.adjust)), 
-                 size = 5, shape = 21, color = "black", fill = "grey80", alpha = 0.1) 
+    + geom_point(data = df, aes(x = NES, y = -log10(p.adjust), fill = NES), 
+                 size = 5, shape = 21, show.legend = F,
+                 color = "black", alpha = 0.1) 
     # Visualize clusters of interest
     + geom_point(data = subset(df, !is.na(Category) & Category == facet_var),
-                 aes(x = NES, y = -log10(p.adjust), fill = Category), 
-                 shape = 21, color = "black", size = 5, alpha = 0.5)
+                 aes(x = NES, y = -log10(p.adjust), colour = Category), 
+                 show.legend = F, size = 5, alpha = 0.7)
     # Label the terms of interest
     + geom_label_repel(
       data = subset(df, ID %in% .pathways$ID & Category == facet_var),
@@ -658,9 +937,8 @@ plotClusters <- function(.df, .pathways){
     + scale_color_manual(values = c("ECM"="#7E03A8FF",
                                     "HYPOXIA"="#F00000FF",
                                     "TGFb"="#09BFF9FF"))
-    + scale_fill_manual(values = c("ECM"="#7E03A8FF",
-                                   "HYPOXIA"="#F00000FF",
-                                   "TGFb"="#09BFF9FF"))
+    + scale_fill_gradient2(low = "blue", high = "red",
+                           mid = "white", midpoint = 0)
     + facet_grid(~facet_var, scales = "free_x")
     + labs(x = expression('NES'),
            y = expression(paste(log[10], italic('FDR'))))
@@ -674,3 +952,47 @@ plotClusters <- function(.df, .pathways){
             legend.position = 'none'))
 }
 
+score_plot <- function(.score, .formula, .ref_group, .x, .y, .title, number = F){
+  # get formula
+  formula <- as.formula(.formula)
+  # statistical test
+  stat.test = compare_means(formula, data = .score, 
+                            method = "wilcox.test", p.adjust.method = "BH",
+                            ref.group = .ref_group)
+  
+  range <- range(.score[[.y]])
+  # Compute category counts
+  counts <- .score %>%
+    group_by(!!sym(.x)) %>%
+    summarise(n = n()) %>%
+    mutate(label = paste0(!!sym(.x), " (n=", n, ")"))  # Modify labels
+  
+  plot = ggplot(.score, aes(x=!!sym(.x), y=!!sym(.y))) + 
+    #geom_jitter(aes(fill = Subtype), size = 5, alpha = 0.25) +
+    geom_boxplot(color = "grey15", fill = "white",outlier.colour = "black",
+                 outlier.shape = 21, outlier.stroke = 1.2, linewidth = .9,
+                 alpha = 0.5) +
+    scale_y_continuous(limits = range, expand = expansion(mult = c(0.1, 0.1)),
+                       breaks = round(seq(floor(min(range)),
+                                          ceiling(max(range)),
+                                          2),1)) + 
+    labs(y = str_wrap(.title, width = 25)) +
+    theme_classic() + 
+    theme(axis.title.x = element_blank(),
+          axis.text.x = element_text(angle = 45, hjust = 1, size = 14, color = "grey25"),
+          axis.title.y = element_text(size = 14),
+          axis.text.y = element_text(size = 14, color = "grey25")) + 
+    stat_pvalue_manual(stat.test, hide.ns = TRUE, label = "p.signif",
+                       size = 5,
+                       remove.bracket = T, y.position = max(.score[[.y]]) - 0.1)
+  
+  if (number) {
+    plot = plot +
+      scale_x_discrete(labels = str_wrap(setNames(counts[["label"]], counts[[.x]]), 5))
+  } else {
+    plot = plot +
+      scale_x_discrete(labels = str_wrap(counts[[.x]], 5))
+  }
+      
+  return(list("plot" = plot, "stat.test" = stat.test))
+}
