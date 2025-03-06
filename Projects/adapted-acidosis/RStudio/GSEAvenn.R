@@ -1,5 +1,5 @@
 ################################################################################
-# 1.) Comparing the Uppsala cells and Lipid loaded cells   #
+# 1.) Comparing the Uppsala cells and Lipid loaded cells                       #
 ################################################################################
 
 # GSEA on the GO terms from MSigDB

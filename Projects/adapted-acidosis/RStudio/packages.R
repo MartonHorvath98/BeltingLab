@@ -27,6 +27,10 @@ suppressPackageStartupMessages(library(clariomdhumantranscriptcluster.db))
 if (!requireNamespace("illuminaHumanv4.db", quietly = TRUE))
     BiocManager::install("illuminaHumanv4.db", update = FALSE)
 suppressPackageStartupMessages(library(illuminaHumanv4.db))
+if (!requireNamespace("TCGAbiolinks", quietly = TRUE))
+  BiocManager::install("TCGAbiolinks", update = FALSE)
+suppressPackageStartupMessages(library(TCGAbiolinks))
+
 
 ################################################################################
 # 2. Utility packages                                                          #
@@ -52,6 +56,9 @@ suppressPackageStartupMessages(library(stringr))
 if (!requireNamespace("DBI", quietly = TRUE))
   install.packages("DBI")
 suppressPackageStartupMessages(library(DBI))
+if (!requireNamespace("MatrixGenerics", quietly = TRUE))
+  install.packages("MatrixGenerics")
+suppressPackageStartupMessages(library(MatrixGenerics))
 
 ################################################################################
 # 3. Visualization packages                                                    #
@@ -59,6 +66,9 @@ suppressPackageStartupMessages(library(DBI))
 if (!requireNamespace("ggplot2", quietly = TRUE))
     install.packages("ggplot2")
 suppressPackageStartupMessages(library(ggplot2))
+if (!requireNamespace("ggpubr", quietly = TRUE))
+  install.packages("ggpubr")
+suppressPackageStartupMessages(library(ggpubr))
 if (!requireNamespace("ggbiplot", quietly = TRUE))
     BiocManager::install("ggbiplot", update = FALSE)
 suppressPackageStartupMessages(library(ggbiplot))
@@ -101,6 +111,9 @@ suppressPackageStartupMessages(library(circlize))
 if (!requireNamespace("gridtext", quietly = TRUE))
     install.packages("gridtext")
 suppressPackageStartupMessages(library(gridtext))
+if(!requireNamespace("RCy3"))
+  BiocManager::install("RCy3", update = FALSE)
+suppressPackageStartupMessages(library(RCy3))
 
 ################################################################################
 # 4. Gene set enrichment and annotation packages                               #
@@ -129,3 +142,13 @@ suppressPackageStartupMessages(library(reactome.db))
 if (!requireNamespace("GSVA", quietly = TRUE))
   BiocManager::install("GSVA", update = FALSE)
 suppressPackageStartupMessages(library(GSVA))
+if (!requireNamespace("rrvgo", quietly = TRUE))
+  BiocManager::install("rrvgo", update = FALSE)
+suppressPackageStartupMessages(library(rrvgo))
+if (!requireNamespace("igraph", quietly = TRUE))
+  BiocManager::install("igraph", update = FALSE)
+suppressPackageStartupMessages(library(igraph))
+if (!requireNamespace("hacksig", quietly = TRUE))
+  BiocManager::install("hacksig", update = FALSE)
+suppressPackageStartupMessages(library(hacksig))
+
