@@ -24,6 +24,8 @@ suppressPackageStartupMessages(library(org.Hs.eg.db))
 #Isoform analysis
 if (!requireNamespace("IsoformSwitchAnalyzeR", quietly = TRUE)) BiocManager::install("IsoformSwitchAnalyzeR", update = F)
 suppressPackageStartupMessages(library(IsoformSwitchAnalyzeR))
+if (!requireNamespace("ballgown", quietly=TRUE)) BiocManager::install("ballgown", update = F)
+suppressPackageStartupMessages(library(ballgown))
 #Visualization
 if (!requireNamespace("ggplot2", quietly = TRUE)) BiocManager::install("ggplot2", update = F)
 suppressPackageStartupMessages(library(ggplot2))

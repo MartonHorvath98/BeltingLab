@@ -259,32 +259,31 @@ table_grob <- tableGrob(
 ggsave(file.path(results_dir, date, "plots", "CCLD_GSEA.svg"), bg = "white", device = "svg",
        plot = CCLD.enrichplot$plot, width = 6, height = 4.45, units = "in")
 
-interest_genes <- read.csv("data/genes-of-interest.txt", header = T,
+interest_genes <- read.csv("data/gene-signature-new.txt", header = T,
                            sep = "\t", stringsAsFactors = T)
-interest_genes <- c("CSGALNACT1","CSGALNACT2","CHSY1","CHSY3","CHPF","CHPF2",
-                    "DCN","BGN","DSE","DSEL","CA9","HIF1A","G0S2","C7orf68")
+#interest_genes <- c("CSGALNACT1","CSGALNACT2","CHSY1","CHSY3","CHPF","CHPF2",
+#                    "DCN","BGN","DSE","DSEL","CA9","HIF1A","G0S2","C7orf68")
 
 TOTAL.heatmap <- list()
 TOTAL.heatmap$data <- interest_genes %>% 
-  dplyr::inner_join(., CCLD.df[,1:2], by = c("Gene.name" = "Symbol")) %>%
-  dplyr::inner_join(., HGCC.deg$U3017[,c(2,4)], by = c("Gene.name" = "Symbol")) %>% 
-  dplyr::inner_join(., HGCC.deg$U3047[,c(2,4)], by = c("Gene.name" = "Symbol")) %>%
-  dplyr::inner_join(., HGCC.deg$U3054[,c(2,4)], by = c("Gene.name" = "Symbol")) %>% 
+  dplyr::inner_join(., CCLD.df[,1:2], by = c("SYMBOL" = "Symbol")) %>%
+  dplyr::inner_join(., HGCC.deg$U3017[,c(2,4)], by = c("SYMBOL" = "Symbol")) %>% 
+  dplyr::inner_join(., HGCC.deg$U3047[,c(2,4)], by = c("SYMBOL" = "Symbol")) %>%
+  dplyr::inner_join(., HGCC.deg$U3054[,c(2,4)], by = c("SYMBOL" = "Symbol")) %>% 
   dplyr::rename_at(vars(contains("log2")), ~c("LDvsnoLD", "U3017", "U3047", "U3054")) %>%
   dplyr::mutate(Category = factor(Category, 
-                                      levels = c("Acidosis/Hypoxia", "CSPG core", "CSPG Biosynthesis- GAG linker",
-                                              "CSPG Biosynthesis","Lipid droplet"),
-                                      labels = c("Acidosis/Hypoxia", "CSPG core", "GAG linker",
-                                              "CSPG Biosynthesis","Lipid droplet"))) %>% 
-  dplyr::select(Gene.name, Category, U3017, U3047, U3054, LDvsnoLD)
+                                      levels = c("Acidosis/Hypoxia", "CSPG core", "CSPG Biosynthesis",
+                                                 "ECM remodelling", "Lipid metabolism"),
+                                      labels = c("Acidosis/Hypoxia", "CSPG core", "CSPG Biosynthesis",
+                                                 "ECM remodelling", "Lipid metabolism"))) %>% 
+  dplyr::select(SYMBOL, Category, U3017, U3047, U3054, LDvsnoLD)
 
 TOTAL.heatmap$matrix <- as.matrix(TOTAL.heatmap$data[,c(3:6)])
 
-row_order <- match(c("CA9","VEGFA","CA12","NCAN","CSPG5","VCAN","BCAN","BGN",
-                     "ACAN","DCN","CSPG4","CD44","XYLT1","XYLT2","CSGALNACT1",
-                     "CHSY1","CHSY3","CHPF","CHPF2","DSEL","HILPDA", "FABP4",
-                     "G0S2","PLIN2","PLIN1","FABP5"),
-                   TOTAL.heatmap$data$Gene.name)
+row_order <- match(c("CA9","VEGFA","CA12","BGN","CSPG4","VCAN","NCAN",
+                     "CHPF","CSGALNACT1","CHSY1","UST","SULF2","COL6A1","FN1",
+                     "THBS4","GPC4","FASN","PPARD","PPARGC1A","HILPDA","VLDLR"),
+                   TOTAL.heatmap$data$SYMBOL)
 col_order <- order(c(
   as.numeric(proxy::dist(rbind(TOTAL.heatmap$matrix[,1, drop=T],
                                TOTAL.heatmap$matrix[,4, drop = T]),
@@ -300,16 +299,16 @@ col_order <- order(c(
                          method = "euclidean", pairwise = T))))
 
 
-row.names(TOTAL.heatmap$matrix) <- TOTAL.heatmap$data$Gene.name
-TOTAL.heatmap$matrix <- TOTAL.heatmap$matrix[row_order,col_order]
+row.names(TOTAL.heatmap$matrix) <- TOTAL.heatmap$data$SYMBOL
+TOTAL.heatmap$matrix <- TOTAL.heatmap$matrix[row_order,col_order]#row_order
 
 cat_annot = rowAnnotation(
   Category = TOTAL.heatmap$data$Category[row_order],
   col = list(Category = c("Acidosis/Hypoxia" = "darkgreen",
                           "CSPG core" = "turquoise",
-                          "GAG linker" = "#8D00FA",
                           "CSPG Biosynthesis" = "#FF08FF",
-                          "Lipid droplet" = "white")
+                          "ECM remodelling" = "#8D00FA",
+                          "Lipid metabolism" = "white")
             
   ),
   gp = gpar(col = "black", fontsize = 14, family = "arial"),
@@ -343,12 +342,13 @@ matrix_col = colorRamp2(c(-4, 0, 4), c("blue", "white", "red"))
                               
                               ### legend settings
                               col = matrix_col, # color settings
-                              name = "Log2 (Fold change)", # color legend title
                               right_annotation = cat_annot, 
-                              heatmap_legend_param = list(direction = "vertical"),
+                              heatmap_legend_param = list(
+                                title = "Log2 (Fold change)",
+                                direction = "vertical"),
                               border_gp = gpar(col = "black", lty = 2)))
 
-svg(file.path(results_dir,"..", "category_heatmap.svg"), width = 12, height = 8)
+svg(file.path("Results","signature", "category_heatmap_new_signature.svg"), width = 12, height = 8)
 draw(TOTAL.heatmap$plot , merge_legend = T,
      heatmap_legend_side = "right", annotation_legend_side = "right")
 dev.off()

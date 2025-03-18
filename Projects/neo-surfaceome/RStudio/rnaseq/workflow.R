@@ -59,11 +59,36 @@ if (exists("readcounts") == F) {
   write.table(mrna.counts, paste(data,"readcounts.csv", sep = "/"), 
               sep =",", na = "NA", dec = ".", row.names = T, col.names = T)
   
-  # 4.) Load count read counts matrix
+  # Load count read counts matrix
   readcounts <- read.csv(file = file.path(data,"readcounts.csv"),
                          sep = ",", header = T, na.strings = NA, row.names = 1)
   readcounts <- as.matrix(readcounts)
   
+}
+# Calculate TPM values for each sample
+if (exists("TPM") == F){
+  # Create a TxDb object from the GTF reference annotation
+  human.txdb <- txdbmaker::makeTxDbFromGFF("../../refs/ref_annot.gtf", format = "gtf",                              format = "gtf",
+                                dataSource = "Ensembl", 
+                                organism = "Homo sapiens")
+  # Extract gene features from the TxDb object
+  human.genes <- exonsBy(human.txdb, by = "gene")
+  # Extract the gene lengths
+  exons <- reduce(human.genes)
+  geneLengths <- sum(width(exons))
+  # Calculate TPM values
+  TPM <- get_TPM(counts = readcounts, effLen = geneLengths)
+  TPM <- TPM[which(rowSums(cpm(readcounts, normalized = T) >1 ) >= 3),]
+  ### Quantile normalize TPM value
+  TPM <- normalize.quantiles(TPM, keep.names = T)
+  row.names(TPM) <- row.names(readcounts)
+  
+  write.table(TPM, paste(data,"TPM.csv", sep = "/"), 
+              sep =",", na = "NA", dec = ".", row.names = T, col.names = T)
+  # Load count read counts matrix
+  TPM <- read.csv(file = file.path(data,"TPM.csv"),
+                         sep = ",", header = T, na.strings = NA, row.names = 1)
+  TPM <- as.matrix(TPM)
 }
 #clean up the workspace
 rm(list = c("mrna.reads","mrna.counts","file.names", "mrna.path", "mrna.files"))
@@ -73,23 +98,7 @@ rm(list = c("mrna.reads","mrna.counts","file.names", "mrna.path", "mrna.files"))
 # ---------------------------------------------------------------------------- #
 
 if (exists("deseq") == F) {
-  # 1.) Calculate TPM values for each sample
-  ### Extract genes from the TxDb object
-  human.txdb <- makeTxDbFromGFF("../../refs/ref_annot.gtf", format = "gtf",
-                                dataSource = "Ensembl", organism = "Homo sapiens")
-  ### Extracting gene features from the TxDb object
-  human.genes <- exonsBy(human.txdb, by = "gene")
-  ### Extracting gene lengths
-  exons <- reduce(human.genes)
-  geneLengths <- sum(width(exons))
-  ### Calculate TPM values
-  TPM <- get_TPM(counts = readcounts, effLen = geneLengths)
-  TPM <- TPM[which(rowSums(cpm(readcounts, normalized = T) >1 ) >= 3),]
-  ### Quantile normalize TPM value
-  TPM <- normalize.quantiles(TPM, keep.names = T)
-  row.names(TPM) <- row.names(readcounts)
-
-  # 2.) Prepare metadata table based on the sample names
+  # 1.) Prepare metadata table based on the sample names
   samples <- colnames(readcounts)
   coldata <- data.frame("samplenames" = samples) %>%
     # extract information from the sample names

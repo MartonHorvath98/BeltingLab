@@ -1,4 +1,4 @@
-lipid_droplet_genes <- read.csv("data/genes-of-interest.txt", header = T,
+lipid_droplet_genes <- read.csv("data/gene-signature-new.txt", header = T,
                            sep = "\t", stringsAsFactors = T)
 subtype_hallmarks <- msigdbr_df %>% 
   dplyr::filter(gs_cat == "C2" & gs_subcat == "CGP" & 
@@ -31,7 +31,7 @@ rm(clin1,clin2)
 Prim_IG <- clin_IvyGap[which(clin_IvyGap$Recurrence=="Primary" & !is.na(clin_IvyGap$Histology)),]
 sel_IvyGap <- IvyGap[,which(colnames(IvyGap) %in% Prim_IG$rna_well_id)]
 Ivygap.score <- hack_sig(as.matrix(sel_IvyGap),
-                         list(as.character(lipid_droplet_genes$Gene.name)),
+                         list(as.character(lipid_droplet_genes$SYMBOL)),
                          method = "zscore")
 Ivygap.score <- setNames(as.data.frame(Ivygap.score), c("sample","zscore"))
 Ivygap.score <- merge(Ivygap.score, Prim_IG, by.x="sample", by.y="rna_well_id")
@@ -68,10 +68,10 @@ Ivygap.score <- Ivygap.score %>%
                                      .y = "zscore", .title = "Lipid droplet gene signature"))
 
 # Save histology plot as png
-ggsave(file.path("Results","signature", "IvyGap_signature_histology_log0.png"), Ivygap.plot$histology$plot,
+ggsave(file.path("Results","signature", "IvyGap_signature_histology_log0_new_signature.png"), Ivygap.plot$histology$plot,
                  device = "png", width = 6, height = 4, units = "in")
 # Save histology plot as svg
-ggsave(file.path("Results", "signature","IvyGap_signature_histology_log0.svg"), Ivygap.plot$histology$plot,
+ggsave(file.path("Results", "signature","IvyGap_signature_histology_log0_new_signature.svg"), Ivygap.plot$histology$plot,
                  device = "svg", width = 6, height = 4, units = "in")
 
 (Ivygap.plot$subtype <- score_plot(.score = Ivygap.score, .formula = "zscore ~ gsea_subtype",
@@ -80,14 +80,14 @@ ggsave(file.path("Results", "signature","IvyGap_signature_histology_log0.svg"), 
                                   number = T))
 
 # Save subtype plot as png
-ggsave(file.path("Results", "signature","IvyGap_signature_subtype_log0.png"), Ivygap.plot$subtype$plot,
+ggsave(file.path("Results", "signature","IvyGap_signature_subtype_log0_new_signature.png"), Ivygap.plot$subtype$plot,
                  device = "png", width = 6, height = 4, units = "in")
 # Save subtype plot as svg
-ggsave(file.path("Results", "signature","IvyGap_signature_subtype_log0.svg"), Ivygap.plot$subtype$plot,
+ggsave(file.path("Results", "signature","IvyGap_signature_subtype_log0_new_signature.svg"), Ivygap.plot$subtype$plot,
                  device = "svg", width = 6, height = 4, units = "in")
 write.xlsx(list("Histology" = Ivygap.plot$histology$stat.test,
                 "Subtype" = CGGA.plot$subtype$stat.test),
-           file.path("Results", "signature","IvyGap_histology+subtype_wilcox_test.xlsx"),
+           file.path("Results", "signature","IvyGap_histology+subtype_wilcox_test_new_signature.xlsx"),
            colNames=TRUE, rowNames=F)
 
 rm(list = c("IvyGap", "clin_IvyGap", "Prim_IG", "sel_IvyGap", "Ivygap.type"))
@@ -125,7 +125,7 @@ list_of_datasets <- list("PrimaryGBM_gexp" = sel_TCGA.expression, "PrimaryGBM_cl
 write.xlsx(list_of_datasets, file = "./data/processed/TCGA.xlsx", colNames=TRUE, rowNames=TRUE)
 
 TCGA.score <- hack_sig(as.matrix(sel_TCGA.expression),
-                        list(as.character(lipid_droplet_genes$Gene.name)), 
+                        list(as.character(lipid_droplet_genes$SYMBOL)), 
                         method = "zscore")
 
 TCGA.score <- setNames(as.data.frame(TCGA.score), c("sample","zscore"))
@@ -161,14 +161,14 @@ TCGA.plot <- list()
                                  number = T))
 
 # Save subtype plot as png
-ggsave(file.path("Results", "signature","TCGA_signature_subtype_log0.png"), TCGA.plot$subtype$plot,
+ggsave(file.path("Results", "signature","TCGA_signature_subtype_log0_new_signature.png"), TCGA.plot$subtype$plot,
                  device = "png", width = 6, height = 4, units = "in")
 # Save subtype plot as svg
-ggsave(file.path("Results", "signature","TCGA_signature_subtype_log0.svg"), TCGA.plot$subtype$plot,
+ggsave(file.path("Results", "signature","TCGA_signature_subtype_log0_new_signature.svg"), TCGA.plot$subtype$plot,
                  device = "svg", width = 6, height = 4, units = "in")
 
 write.xlsx(list("Subtype" = TCGA.plot$subtype$stat.test),
-           file.path("Results", "signature","TCGA_subtype_wilcox_test.xlsx"),
+           file.path("Results", "signature","TCGA_subtype_wilcox_test_new_signature.xlsx"),
            colNames=TRUE, rowNames=F)
 
 rm(list = c("TCGA.expression", "TCGA.clinical", "sel_TCGA.expression", 
@@ -206,7 +206,7 @@ list_of_datasets <- list("PrimaryGBM_gexp" = CGGA.expression, "PrimaryGBM_clinic
 write.xlsx(list_of_datasets, file = "./data/processed/CGGA.xlsx", colNames=TRUE, rowNames=TRUE)
 
 CGGA.score <- hack_sig(as.matrix(CGGA.expression),
-                        list(as.character(lipid_droplet_genes$Gene.name)), 
+                        list(as.character(lipid_droplet_genes$SYMBOL)), 
                         method = "zscore")
 
 CGGA.score <- setNames(as.data.frame(CGGA.score), c("sample","zscore"))
@@ -241,13 +241,13 @@ CGGA.plot <- list()
                                  number = T))
 
 # Save subtype plot as png
-ggsave(file.path("Results", "signature","CGGA_signature_subtype_log0.png"), CGGA.plot$subtype$plot,
+ggsave(file.path("Results", "signature","CGGA_signature_subtype_log0_new_signature.png"), CGGA.plot$subtype$plot,
                  device = "png", width = 6, height = 4, units = "in")
 # Save subtype plot as svg
-ggsave(file.path("Results", "signature","CGGA_signature_subtype_log0.svg"), CGGA.plot$subtype$plot,
+ggsave(file.path("Results", "signature","CGGA_signature_subtype_log0_new_signature.svg"), CGGA.plot$subtype$plot,
                  device = "svg", width = 6, height = 4, units = "in")
 write.xlsx(list("Subtype" = CGGA.plot$subtype$stat.test),
-           file.path("Results", "signature","CGGA_subtype_wilcox_test.xlsx"),
+           file.path("Results", "signature","CGGA_subtype_wilcox_test_new_signature.xlsx"),
            colNames=TRUE, rowNames=F)
 rm(list = c("CGGA.expression", "CGGA.clinical", "CGGA.primary", "CGGA.type"))
 
