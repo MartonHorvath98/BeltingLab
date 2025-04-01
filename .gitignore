@@ -29,10 +29,19 @@ plots/
 report/ 
 
 # Reference genome
-refs/
+CTAT/
 
 # Report
 *.pptx
 
 # Log builder script
 log-builder.sh
+
+# data files
+*.fasta
+*.tsv
+*.txt
+*.xlsx
+*.dat
+*.log
+*.hmm*
