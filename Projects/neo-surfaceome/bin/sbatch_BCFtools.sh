@@ -4,7 +4,7 @@
 #SBATCH -t 3-00:00:00
 #SBATCH -J snv-calling
 
-# Marton Horvath, OCT 2024 - last modified: DEC 2024
+# Marton Horvath, July 2024
 # ------------ Start a screen environment ----- #
 screen -S variant
 # ------------ Load needed modules ------------ #
@@ -17,7 +17,6 @@ export WHARF=/proj/sens2020018/nobackup/wharf/hmarton/hmarton-sens2020018/
 # ------------ Set global variables ------------ #
 # Set the number of cores
 CORES=16
-SUBCORES=8
 eval echo "Number of cores: ${CORES}"
 
 INPUT_DIR="${WHARF}results/05_variant/"
@@ -89,14 +88,14 @@ if [ -d "${INPUT_DIR}" ] ; then
 		--RANDOM_SEED 42 --PROBABILITY 0.75 --VALIDATION_STRINGENCY SILENT
 	    ${SAMTOOLS_EXE} index "${TMP_DIR}${sample}-75pc.bam"
 	    ### - calculating coverage
-	    ${BCFTOOLS_EXE} mpileup --redo-BAQ --min-BQ 30 --max-depth 10000 --per-sample-mF \
+	    ${BCFTOOLS_EXE} mpileup --redo-BAQ --min-BQ 30 --per-sample-mF \
 		--annotate FORMAT/DP,FORMAT/AD --threads "${CORES}" -Ou -f "${REFERENCE}ref_genome.fa" \
 		"${INPUT_DIR}${sample}-dedup.bam" "${TMP_DIR}${sample}-25pc.bam" \
 		"${TMP_DIR}${sample}-50pc.bam" "${TMP_DIR}${sample}-75pc.bam" |\
-                ${BCFTOOLS_EXE} call --multiallelic-caller --variants-only -p 0.05 -Oz >\
+                ${BCFTOOLS_EXE} call --multiallelic-caller --variants-only -Oz >\
                 "${OUTPUT_DIR}${sample}-bcftools.vcf.gz"
 	    ### - visualize possible biases
-	    ${BCFTOOLS_EXE} stats --threads ${CORES} -F "${REFERENCE}ref_genome.fasta" -s - \
+	    ${BCFTOOLS_EXE} stats --threads ${CORES} -F "${REFERENCE}ref_genome.fa" -s - \
 		"${OUTPUT_DIR}${sample}-bcftools.vcf.gz" > "${OUTPUT_DIR}${sample}.vcf.stats"
 	fi
 

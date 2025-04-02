@@ -4,7 +4,7 @@
 #SBATCH -t 2-00:00:00
 #SBATCH -J report
 
-# Marton Horvath, MAY 2024 - last modified: MAY 2024
+# Marton Horvath, Maj 2024
 # ------------ Start a screen environment ----- #
 screen -S report
 # ------------ Load needed modules ------------ #

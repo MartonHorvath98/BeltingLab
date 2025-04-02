@@ -29,7 +29,7 @@ plots/
 report/ 
 
 # Reference genome
-CTAT/
+resources/
 
 # Report
 *.pptx

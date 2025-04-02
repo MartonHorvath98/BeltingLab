@@ -1,0 +1,49 @@
+name: hmmscan
+description: search sequence(s) against a profile database using HMMER 3.3.2 (Nov 2020)
+keywords:
+  - hmmer
+  - hmmscan
+  - database
+  - domain-search
+tools:
+  - hmmscan:
+      description: search sequence(s) against a profile database using HMMER 3.3.2 (Nov 2020)
+      homepage: https://hmmer.org
+      documentation: http://eddylab.org/software/hmmer/Userguide.pdf
+      doi: "10.1371/journal.pcbi.1002195"
+      licence: ["BSD"]
+      identifier: ""
+input:
+  - query:
+      type: file
+      description: input sequence(s) in FASTA format
+      pattern: "*.{fasta,fna,faa,fa,fasta.gz,fna.gz,faa.gz,fa.gz}"
+      required: true
+  - hmm: 
+      type: file
+      description: HMMER database file (e.g. .hmm)
+      pattern: "*.{hmm, hmm.gz}"
+      required: true
+  - args:
+      type: string
+      description: additional options for hmmscan
+      required: false
+      default: "--noali --domE 0.001 --cpu 4 "
+output:
+  - output:
+    - "*.tblout.dat":
+        type: file
+        description: tabular (space-delimited) summary of per-domain output
+        pattern: "*.{tblout.dat}"
+        required: true
+  - log:
+      - "*.log":
+        type: file
+        description: log file from hmmscan
+        pattern: "*.{log}"
+        required: false 
+        default: "hmmscan.log"
+author:
+  - "@hmarton98"
+maintainer:
+  - "@hmarton98"

@@ -4,7 +4,7 @@
 #SBATCH -t 3-00:00:00
 #SBATCH -J align-STAR
 
-# Marton Horvath, Jun 2024 - last modified: DEC 2024
+# Marton Horvath, Jun 2024
 # ------------ Start a screen environment ----- #
 screen -S STARalignment
 # ------------ Load needed modules ------------ #

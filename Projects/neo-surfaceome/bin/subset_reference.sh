@@ -4,7 +4,7 @@
 #SBATCH -t 1-00:00:00
 #SBATCH -J subset-reference
 
-# Marton Horvath, DEC 2024 - last modified: DEC 2024
+# Marton Horvath, Dec 2024
 # ------------ Start a screen environment ----- #
 screen -S SubsetRefGenome
 # ------------ Load needed modules ------------ #

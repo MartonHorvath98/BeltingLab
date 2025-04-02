@@ -4,7 +4,7 @@
 #SBATCH -t 3-00:00:00
 #SBATCH -J star-fusion
 
-# Marton Horvath, MAY 2024 - last modified: DEC 2024 
+# Marton Horvath, May 2024
 # ------------ Start a screen environment ----- #
 screen -S STAR-Fusion
 # ------------ Load needed modules ------------ #
