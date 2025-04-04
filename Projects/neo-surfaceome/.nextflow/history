@@ -1,0 +1,22 @@
+2025-04-04 12:59:30	18.1s	magical_wilson	ERR	29c9ab563ae8fbb8de2417abc1727d08	39de23b3-35bf-4b1f-8b54-19cd38137409	nextflow run nextflow/subworkflows/prep_pfam/main.nf -resume
+2025-04-04 13:28:46	3.4s	peaceful_ptolemy	ERR	20e2e22237c2c2001b36a8765055063f	7c9d713a-e88c-4eb6-9b7c-a39747356eb4	nextflow run nextflow/subworkflows/prep_pfam/main.nf
+2025-04-04 13:31:05	2m 32s	romantic_bardeen	ERR	b5cb4ec5679ceebb683cce4cb4359869	50f66e0d-a669-43c7-b49a-278abce84572	nextflow run nextflow/subworkflows/prep_pfam/main.nf
+2025-04-04 13:47:11	21.9s	infallible_booth	ERR	24dcec2250c5a257c9cd1410f9372ebf	1d1e1894-45e7-4e5e-a277-7b5cf8963ec9	nextflow run nextflow/subworkflows/prep_pfam/main.nf
+2025-04-04 13:54:01	2.5s	determined_wilson	ERR	2dee1c68a90a91a159850829aa6d7730	94914594-7460-4449-baa0-e817b8fdf12a	nextflow run nextflow/subworkflows/prep_pfam/main.nf
+2025-04-04 13:55:17	2m 46s	distraught_jepsen	OK	740b46d86834ea1bbf8cef0f0a066b2c	fab5fc29-7d91-4b35-bcf2-ff84830e9c4b	nextflow run nextflow/subworkflows/prep_pfam/main.nf
+2025-04-04 14:15:47	3m 24s	confident_picasso	ERR	743804d34f3705ebad8da41413f31fcf	b381ed76-c986-47d3-859d-56a9b60d0242	nextflow run nextflow/subworkflows/prep_pfam/main.nf
+2025-04-04 14:19:56	5m 10s	desperate_noether	OK	743804d34f3705ebad8da41413f31fcf	b381ed76-c986-47d3-859d-56a9b60d0242	nextflow run nextflow/subworkflows/prep_pfam/main.nf -resume
+2025-04-04 14:39:46	2.6s	sharp_mandelbrot	OK	fc50256a4fa50f15a894e4c1c443b0fc	b381ed76-c986-47d3-859d-56a9b60d0242	nextflow run nextflow/subworkflows/prep_pfam/main.nf -resume
+2025-04-04 14:42:48	3s	pedantic_colden	OK	fc50256a4fa50f15a894e4c1c443b0fc	b381ed76-c986-47d3-859d-56a9b60d0242	nextflow run nextflow/subworkflows/prep_pfam/main.nf -resume -ansi-log false
+2025-04-04 14:43:59	2.9s	prickly_volhard	OK	fc50256a4fa50f15a894e4c1c443b0fc	b381ed76-c986-47d3-859d-56a9b60d0242	nextflow run nextflow/subworkflows/prep_pfam/main.nf -resume -ansi-log false
+2025-04-04 14:44:20	2.3s	modest_dijkstra	OK	fc50256a4fa50f15a894e4c1c443b0fc	b381ed76-c986-47d3-859d-56a9b60d0242	nextflow run nextflow/subworkflows/prep_pfam/main.nf -resume
+2025-04-04 14:45:43	2.8s	exotic_carlsson	OK	052cec6d7402bad4ab2dea5f994b3435	b381ed76-c986-47d3-859d-56a9b60d0242	nextflow run nextflow/subworkflows/prep_pfam/main.nf -resume
+2025-04-04 14:46:02	45.2s	maniac_lalande	ERR	0dbfc857c4300d2e652aef59627eeff2	b381ed76-c986-47d3-859d-56a9b60d0242	nextflow run nextflow/subworkflows/prep_pfam/main.nf -resume
+2025-04-04 14:47:16	3m 59s	big_franklin	OK	0dbfc857c4300d2e652aef59627eeff2	b381ed76-c986-47d3-859d-56a9b60d0242	nextflow run nextflow/subworkflows/prep_pfam/main.nf -resume
+2025-04-04 15:23:23	-	jovial_hawking	-	83e36eb1d6713826573d082f90b45277	b381ed76-c986-47d3-859d-56a9b60d0242	nextflow run nextflow/subworkflows/prep_3did/main.nf -resume -c nextflow/subworkflows/nextflow.config
+2025-04-04 15:25:39	2m 23s	naughty_hamilton	OK	3b73a8218f1c9232daca8b378625c105	b381ed76-c986-47d3-859d-56a9b60d0242	nextflow run nextflow/subworkflows/prep_3did/main.nf -resume -c nextflow/subworkflows/nextflow.config
+2025-04-04 15:40:07	2.8s	marvelous_faggin	OK	9aef435d70c38829a751065f4bede1a9	b381ed76-c986-47d3-859d-56a9b60d0242	nextflow run nextflow/subworkflows/prep_3did/main.nf -resume -c nextflow/subworkflows/nextflow.config
+2025-04-04 15:44:25	2.6s	stupefied_wescoff	OK	9e5d1f8ff20e9617e8f821c6ed187429	b381ed76-c986-47d3-859d-56a9b60d0242	nextflow run nextflow/subworkflows/prep_3did/main.nf -resume -c nextflow/subworkflows/nextflow.config
+2025-04-04 15:47:34	3.2s	cheeky_maxwell	OK	9344142eebab38dd1422a06339213cf0	b381ed76-c986-47d3-859d-56a9b60d0242	nextflow run nextflow/subworkflows/prep_3did/main.nf -resume -c nextflow/subworkflows/nextflow.config
+2025-04-04 15:48:34	27.1s	distraught_yonath	OK	fdab13f8b48654af5d7e0c1d26dfd460	b381ed76-c986-47d3-859d-56a9b60d0242	nextflow run nextflow/subworkflows/prep_3did/main.nf -resume -c nextflow/subworkflows/nextflow.config
+2025-04-04 15:59:46	4m 32s	condescending_angela	OK	fdab13f8b48654af5d7e0c1d26dfd460	b381ed76-c986-47d3-859d-56a9b60d0242	nextflow run nextflow/subworkflows/prep_3did/main.nf -resume -c nextflow/subworkflows/nextflow.config
