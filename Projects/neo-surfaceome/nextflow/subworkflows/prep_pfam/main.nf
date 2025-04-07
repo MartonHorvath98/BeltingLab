@@ -18,7 +18,7 @@ workflow {
     // Create the channel with filenames
     file_ch = Channel.of(params.filenames).flatten()
     // STEP 1: Download the files
-    download_ch = GET(params.url, file_ch)
+    download_ch = GET(file_ch)
     // STEP 2: Select out the HMM file
     hmm_file_ch = download_ch.filter { it.name.endsWith('.hmm') }
     hmm_file_ch.view { file ->

@@ -5,8 +5,10 @@
  * for more accurate quantification of the transcriptomic data. 
 */
 process SALMON_INDEX{
-    publishDir "${params.base_publish_dir}/${params.dataset}", mode: 'copy'
+    publishDir "${params.base_publish_dir}/${params.genome_file}.salmon.idx", mode: 'copy'
     label params.dataset
+    
+    conda "${moduleDir}/environment.yml"
     
     input:
     tuple path(genome_fasta), path(transcriptome_fasta)
@@ -15,7 +17,7 @@ process SALMON_INDEX{
     path index_folder, emit: salmon_index
 
     script:
-    index_folder = file("${genome_fasta.baseName}salmon.idx")
+    index_folder = file("${genome_fasta.baseName}.salmon.idx")
     """
     # Create decoy file for salmon index
     grep "^>" ${genome_fasta} | cut -d " " -f 1 | sed -e 's/>//g' > "${params.base_publish_dir}/${params.dataset}/decoys.txt"

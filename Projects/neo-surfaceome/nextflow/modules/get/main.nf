@@ -3,21 +3,18 @@
 * Nextflow module to dowload files from //https:, //ftp:, //http: host sites on the internet.
 * The module uses wget to download files and stores them in the specified output directory, then unzips them using gunzip.
 */
-process GET{
-    publishDir "${params.base_publish_dir}/${params.dataset}", mode: 'copy'
-    label params.dataset
+process GET {
+    publishDir "${params.ref_dir}", mode: 'copy'
     
     input:
     val url
-    val input_file
 
     output:
-    path output_file
+    path input_file, emit: archive
 
     script:
-    output_file = input_file - '.gz'
+    input_file = url.split('/').last()
     """
-    wget -O $input_file $url/$input_file 
-    gunzip -c $input_file > $output_file
+    wget -O $input_file $url
     """
 }

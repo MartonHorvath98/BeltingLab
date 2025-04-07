@@ -38,7 +38,7 @@ workflow {
     // Create the channel with filenames
     file_ch = Channel.of(params.filenames).flatten()
     // STEP 1: Download the files
-    download_ch = GET(params.url, file_ch)
+    download_ch = GET(file_ch)
     // STEP 2: Filter out the .dat file for processing (uncompressed)
     output_name = download_ch
         .filter { it.name.endsWith('flat') }
