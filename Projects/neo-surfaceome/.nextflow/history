@@ -62,3 +62,48 @@
 2025-04-07 15:13:31	-	amazing_fermat	-	90bfb379e55e1ae3ed84c5e4500be178	3e089e5b-4345-4b6e-9aad-ac8de101f245	nextflow run nextflow/workflows/build_references.nf -c nextflow/nextflow.config --output . -resume
 2025-04-07 15:13:46	-	suspicious_sax	-	793feb5fab572ca5c9251727373d74e5	3e089e5b-4345-4b6e-9aad-ac8de101f245	nextflow run nextflow/workflows/build_references.nf -c nextflow/nextflow.config --output . -resume
 2025-04-07 15:16:07	-	cranky_ardinghelli	-	c492a75df6c0d79b1f936acfc5b8d18a	3e089e5b-4345-4b6e-9aad-ac8de101f245	nextflow run nextflow/workflows/build_references.nf -c nextflow/nextflow.config --output . -resume
+2025-04-07 16:17:12	17m 12s	boring_jones	ERR	7a75710420a9a5d739ee0fe45c38e250	0c3d22a8-016c-4ae8-af34-97ab561c2dd0	nextflow run nextflow/workflows/build_references.nf -c nextflow/nextflow.config
+2025-04-07 18:01:40	2h 2m 41s	scruffy_varahamihira	ERR	7a75710420a9a5d739ee0fe45c38e250	d30ff8e8-4ef8-49b1-a332-ba1b17715123	nextflow run nextflow/workflows/build_references.nf -c nextflow/nextflow.config
+2025-04-07 20:28:22	6.6s	curious_heisenberg	ERR	c082463b1970c1a178549ef064d39ee2	d30ff8e8-4ef8-49b1-a332-ba1b17715123	nextflow run nextflow/workflows/build_references.nf -c nextflow/nextflow.config -resume
+2025-04-07 20:33:59	33.1s	stupefied_swirles	ERR	92ac6da9667e1b0901bae7a67ad75fbe	d30ff8e8-4ef8-49b1-a332-ba1b17715123	nextflow run nextflow/workflows/build_references.nf -c nextflow/nextflow.config -resume
+2025-04-07 20:38:47	21.9s	spontaneous_gutenberg	ERR	92ac6da9667e1b0901bae7a67ad75fbe	d30ff8e8-4ef8-49b1-a332-ba1b17715123	nextflow run nextflow/workflows/build_references.nf -c nextflow/nextflow.config -resume
+2025-04-07 20:39:30	51.4s	thirsty_hoover	ERR	92ac6da9667e1b0901bae7a67ad75fbe	d30ff8e8-4ef8-49b1-a332-ba1b17715123	nextflow run nextflow/workflows/build_references.nf -c nextflow/nextflow.config -resume -ansi-log false
+2025-04-07 20:52:34	28.7s	elated_albattani	ERR	92ac6da9667e1b0901bae7a67ad75fbe	d30ff8e8-4ef8-49b1-a332-ba1b17715123	nextflow run nextflow/workflows/build_references.nf -c nextflow/nextflow.config -resume -ansi-log false
+2025-04-07 21:15:45	1m 14s	sleepy_ekeblad	ERR	92ac6da9667e1b0901bae7a67ad75fbe	d30ff8e8-4ef8-49b1-a332-ba1b17715123	nextflow run nextflow/workflows/build_references.nf -c nextflow/nextflow.config -resume -ansi-log false
+2025-04-07 21:19:43	6.8s	boring_swanson	ERR	92ac6da9667e1b0901bae7a67ad75fbe	d30ff8e8-4ef8-49b1-a332-ba1b17715123	nextflow run nextflow/workflows/build_references.nf -c nextflow/nextflow.config -resume -ansi-log false
+2025-04-07 21:20:18	6.5s	disturbed_heyrovsky	ERR	92ac6da9667e1b0901bae7a67ad75fbe	d30ff8e8-4ef8-49b1-a332-ba1b17715123	nextflow run nextflow/workflows/build_references.nf -c nextflow/nextflow.config -resume -ansi-log false
+2025-04-07 21:23:50	59.1s	curious_bernard	ERR	92ac6da9667e1b0901bae7a67ad75fbe	d30ff8e8-4ef8-49b1-a332-ba1b17715123	nextflow run nextflow/workflows/build_references.nf -c nextflow/nextflow.config -resume -ansi-log false
+2025-04-07 21:47:26	27.4s	zen_franklin	ERR	92ac6da9667e1b0901bae7a67ad75fbe	d30ff8e8-4ef8-49b1-a332-ba1b17715123	nextflow run nextflow/workflows/build_references.nf -c nextflow/nextflow.config -resume -ansi-log false --output resources
+2025-04-07 21:52:45	40.6s	ecstatic_poitras	ERR	92ac6da9667e1b0901bae7a67ad75fbe	d30ff8e8-4ef8-49b1-a332-ba1b17715123	nextflow run nextflow/workflows/build_references.nf -c nextflow/nextflow.config -resume -ansi-log false --output resources
+2025-04-07 21:53:45	44.4s	fabulous_bhaskara	ERR	92ac6da9667e1b0901bae7a67ad75fbe	d30ff8e8-4ef8-49b1-a332-ba1b17715123	nextflow run nextflow/workflows/build_references.nf -c nextflow/nextflow.config -resume -ansi-log false --output resources
+2025-04-07 21:55:57	28s	marvelous_payne	ERR	52a8a0a34900ae80d965dbed3d13252e	d30ff8e8-4ef8-49b1-a332-ba1b17715123	nextflow run nextflow/workflows/build_references.nf -c nextflow/nextflow.config -resume -ansi-log false --output resources
+2025-04-15 12:26:19	-	lonely_hodgkin	-	7fadd31f95731e687e47c7fe80cd79ad	aaa8a77f-1304-4587-93c9-8e1d856fcc78	nextflow run rnaseq.nf -with-docker gbm-docker
+2025-04-15 12:26:59	5.1s	intergalactic_bell	ERR	7fadd31f95731e687e47c7fe80cd79ad	f2078dc0-573b-48b5-af1a-766caf3ebbc5	nextflow run rnaseq.nf -with-docker gbm-docker
+2025-04-15 12:29:12	4.2s	silly_lorenz	ERR	7fadd31f95731e687e47c7fe80cd79ad	abdb0d8f-0f6c-4e05-8634-c2e66eed7d99	nextflow run rnaseq.nf -with-docker gbm-docker
+2025-04-15 12:29:31	4s	special_yonath	ERR	7fadd31f95731e687e47c7fe80cd79ad	8618a853-847d-4ab8-b2b8-dfb60b068860	nextflow run rnaseq.nf -with-docker gbm-docker -c nextflow.config
+2025-04-15 12:30:38	5.4s	extravagant_bernard	ERR	7fadd31f95731e687e47c7fe80cd79ad	3fe88c2a-2fe2-439f-9243-0bff0d33f675	nextflow run rnaseq.nf -with-docker gbm-docker -c nextflow.config
+2025-04-15 12:32:21	4.6s	astonishing_legentil	ERR	613a689fbfa70c54a3ce3e81d52838af	864b3457-820f-4132-8f43-f36c14e2e4a9	nextflow run rnaseq.nf -with-docker gbm-docker -c nextflow.config
+2025-04-15 12:36:22	2s	drunk_murdock	ERR	8b61ff8ff4b5b043ac9c6c8e6d7004a5	0adceb15-92a8-421a-86dc-4c389345ecb9	nextflow run rnaseq.nf -with-docker gbm-docker -c nextflow.config
+2025-04-15 14:00:51	-	prickly_pasteur	-	52f4a7967b495858cde5aba8ecafe86e	96dd5481-ff32-42dc-976c-8d8a3d0374d6	nextflow run rnaseq.nf -with-docker gbm-docker -c nextflow.config
+2025-04-15 15:47:44	-	pensive_hamilton	-	e03c0716ec2cd53103ffba5adec68774	59250acc-e4bc-486c-9473-d339ba231fec	nextflow run rnaseq.nf -with-docker gbm-docker -c nextflow.config
+2025-04-15 15:56:47	2.8s	hopeful_mayer	ERR	4d80879a4973e18bc54cda68f553282e	79cab5f0-adb4-40dc-924f-019562965404	nextflow run rnaseq.nf -with-docker gbm-docker -c nextflow.config
+2025-04-15 15:57:40	2s	happy_pasteur	ERR	c5821780e95e7e214420be63bc9fa584	7e9b159a-c6ba-421f-801f-b2189872d530	nextflow run rnaseq.nf -with-docker gbm-docker -c nextflow.config
+2025-04-15 15:57:57	2.6s	wise_gautier	ERR	14c06ca929a87f67b9329735ded356cb	fc9e58d4-e5b2-4d47-a116-fdf889b708b8	nextflow run rnaseq.nf -with-docker gbm-docker -c nextflow.config
+2025-04-15 16:01:22	6.8s	friendly_watson	ERR	3af92b2cec96cb81de97781a3608066d	fa2bae4e-dcb5-42b3-b610-b484fb491b4c	nextflow run rnaseq.nf -with-docker gbm-docker -c nextflow.config
+2025-04-15 16:14:37	-	nauseous_magritte	-	8cd3379bd87e667aed450b39feac3b14	eab3f98e-8456-4fac-ad25-d5d4481450ef	nextflow run rnaseq.nf -with-docker gbm-docker -c nextflow.config
+2025-04-15 16:15:01	2.1s	cheesy_volta	OK	f70a849e196c7e125467aba816c8024c	d215041b-8df5-46f3-bcc7-08bf43727d59	nextflow run rnaseq.nf -with-docker gbm-docker -c nextflow.config
+2025-04-15 16:15:36	2.8s	adoring_archimedes	ERR	f70a849e196c7e125467aba816c8024c	cc76c556-eeed-4f86-a237-3c1612ad4598	nextflow run rnaseq.nf -with-docker gbm-docker -c nextflow.config
+2025-04-15 16:16:22	2.5s	scruffy_wilson	ERR	f70a849e196c7e125467aba816c8024c	1894adec-0480-41de-a813-27294257d519	nextflow run rnaseq.nf -with-docker gbm-docker -c nextflow.config
+2025-04-15 16:20:11	2.7s	agitated_sax	ERR	f70a849e196c7e125467aba816c8024c	f29592c4-ca59-4302-87c4-c65556458ad7	nextflow run rnaseq.nf -with-docker gbm-docker -c nextflow.config
+2025-04-15 16:26:18	2.3s	backstabbing_roentgen	OK	c822e4a81bb812fc6a82e971989af87e	455964e0-e84f-4212-9f2d-b6dd5f1440ce	nextflow run rnaseq.nf -with-docker gbm-docker -c nextflow.config
+2025-04-15 16:27:27	3.5s	clever_kare	ERR	752af94f1e6c35095b3ad3c5e76c2bb2	f10f5a2e-e534-49cf-8bb3-fc4b808d6059	nextflow run rnaseq.nf -with-docker gbm-docker -c nextflow.config
+2025-04-15 16:28:16	3s	exotic_franklin	ERR	752af94f1e6c35095b3ad3c5e76c2bb2	ea0e1af2-b9f7-4ef4-9070-7573e218484d	nextflow run rnaseq.nf -with-docker gbm-docker -c nextflow.config
+2025-04-15 16:28:44	6.5s	admiring_fermi	ERR	752af94f1e6c35095b3ad3c5e76c2bb2	d4b4ebaa-a9a3-4a82-ab6b-c4cf5967b733	nextflow run rnaseq.nf -with-docker gbm-docker -c nextflow.config
+2025-04-15 16:49:12	3.2s	serene_wilson	ERR	502705451962d12ebbff33499e286e49	c8b4aa2a-ab1e-4595-ae45-28404cadf3e3	nextflow run rnaseq.nf -with-docker gbm-docker -c nextflow.config
+2025-04-15 16:55:44	6m 56s	infallible_pasteur	ERR	646d64539ba37dfa87034125431113c9	8c96e18c-d52c-4399-9320-5b6c375ad8f7	nextflow run rnaseq.nf -with-docker gbm-docker -c nextflow.config
+2025-04-16 10:55:29	3.1s	nostalgic_wright	ERR	646d64539ba37dfa87034125431113c9	1cb8e4f5-9632-4e43-b5e5-b127449c6e3a	nextflow run rnaseq.nf -with-docker gbm-docker -c nextflow.config
+2025-04-16 10:58:23	5.2s	scruffy_tuckerman	ERR	646d64539ba37dfa87034125431113c9	dd5e4b9b-31c1-4be2-a727-39f7100192ce	nextflow run rnaseq.nf -with-docker gbm-docker -c nextflow.config
+2025-04-16 11:07:46	20.1s	reverent_easley	OK	646d64539ba37dfa87034125431113c9	dd5e4b9b-31c1-4be2-a727-39f7100192ce	nextflow run rnaseq.nf -with-docker gbm-docker -c nextflow.config -resume
+2025-04-16 11:21:53	1m 26s	small_newton	ERR	f0646f204274745d4ca8322ad797016f	dd5e4b9b-31c1-4be2-a727-39f7100192ce	nextflow run rnaseq.nf -with-docker gbm-docker -c nextflow.config -resume
+2025-04-16 11:44:59	1m 19s	silly_raman	ERR	f0646f204274745d4ca8322ad797016f	dd5e4b9b-31c1-4be2-a727-39f7100192ce	nextflow run rnaseq.nf -with-docker gbm-docker -c nextflow.config -resume
+2025-04-16 12:00:02	-	admiring_ptolemy	-	f0646f204274745d4ca8322ad797016f	dd5e4b9b-31c1-4be2-a727-39f7100192ce	nextflow run rnaseq.nf -with-docker gbm-docker -c nextflow.config -resume

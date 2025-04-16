@@ -22,6 +22,7 @@
 
 # Dataset files
 data/
+rawdata/
 
 # Results
 results/
@@ -29,10 +30,11 @@ plots/
 report/ 
 
 # Reference genome
-resources/
+ctat-genome-lib/
 
 # Report
 *.pptx
+legacy-scripts/
 
 # Log builder script
 log-builder.sh
@@ -45,3 +47,8 @@ log-builder.sh
 *.dat
 *.log
 *.hmm*
+
+# nextflow files
+work/
+.nextflow.*
+cache/

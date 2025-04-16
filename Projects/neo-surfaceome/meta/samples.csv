@@ -1,0 +1,3 @@
+sample,read1,read2
+Sample_VI-3429-593-tumor-tissue,./rawdata/Sample_VI-3429-593-tumor-tissue/VI-3429-593-tumor-tissue_R1_001.fastq.gz,./rawdata/Sample_VI-3429-593-tumor-tissue/VI-3429-593-tumor-tissue_R2_001.fastq.gz
+Sample_VI-3429-673-tumor-tissue,./rawdata/Sample_VI-3429-673-tumor-tissue/VI-3429-673-tumor-tissue_R1_001.fastq.gz,./rawdata/Sample_VI-3429-673-tumor-tissue/VI-3429-673-tumor-tissue_R2_001.fastq.gz

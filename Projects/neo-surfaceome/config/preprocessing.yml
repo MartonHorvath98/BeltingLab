@@ -1,8 +1,0 @@
-name: pfamscan
-channels:
-  - conda-forge
-  - bioconda
-dependencies:
-  - hmmer=3.3.2
-  - perl-moose
-  - perl-bioperl
