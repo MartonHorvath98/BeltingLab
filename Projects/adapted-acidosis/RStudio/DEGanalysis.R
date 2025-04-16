@@ -396,22 +396,13 @@ interest_genes <- c("CSGALNACT1","CSGALNACT2","CHSY1","CHSY3","CHPF","CHPF2",
                     "DCN","BGN","DSE","DSEL","CA9","HIF1A","G0S2","C7orf68")
 
 U87.subset <- list()
-U87.subset$exp <- as.data.frame(U87.dat) %>% 
-  dplyr::select(c("SYMBOL" | contains(names(samples)))) %>% 
-  tibble::rownames_to_column("PROBEID") %>% 
-  dplyr::filter(PROBEID %in% c(U87.deg$`sel_pH647-control_sel`$ID.ID,
-                               U87.deg$`acu_pH68-control_acu`$ID.ID,
-                               U87.deg$`acu_pH64-control_acu`$ID.ID,
-                               U87.deg$`hypoxia-control_nox`$ID.ID)) %>% 
-  dplyr::filter(SYMBOL %in% interest_genes)
 
-U87.subset$exp <- U87.subset$exp[order(desc(rowVars(as.matrix(U87.subset$exp[,-c(1,2)])))),] %>%
-  dplyr::distinct(SYMBOL, .keep_all = T)
+U87.subset$logexp <- U87.expr %>%
+  dplyr::select(!ENTREZID) %>% 
+  dplyr::filter(SYMBOL %in% interest_genes) 
 
-U87.subset$logexp <- as.data.frame(neqc(U87.dat)[U87.subset$exp$PROBEID,names(samples)]$E) %>% 
-  tibble::rownames_to_column("PROBEID") %>%
-  dplyr::mutate(SYMBOL = U87.subset$exp$SYMBOL[match(PROBEID, U87.subset$exp$PROBEID)]) %>% 
-  dplyr::relocate(SYMBOL, .after = PROBEID)
+U87.subset$exp <- U87.subset$logexp %>% 
+  dplyr::mutate(across("200118400068_I":"200118400033_I", ~ 2^.))
 
 U87.subset$df <- dplyr::inner_join(
   U87.subset$exp %>% 
@@ -461,7 +452,7 @@ lapply(names(tmp), function(x){
 
 
 
-dir.create(file.path(wd, results_dir, date, "tables"), recursive = T, showWarnings = FALSE)
+dir.create(file.path(wd, "Results", "U87", date, "tables"), recursive = T, showWarnings = FALSE)
 openxlsx::write.xlsx(U87.subset, 
                      file.path(wd, "Results", "U87", date, "tables",
                                "U87_linear_scale_genes-of-interest_expression.xlsx"))

@@ -549,16 +549,16 @@ GSEA.object = list(
   U3047 = HGCC.GSEA$U3047$gsea,
   U3054 = HGCC.GSEA$U3054$gsea,
   CCLD = CCLD.GSEA$gsea,
-  U87_CA = U87.GSEA$`sel_pH647-control_sel`$gsea,
-  U87_AA = U87.GSEA$`acu_pH64-control_acu`$gsea
+  U87_sel = U87.GSEA$`sel_pH647-control_sel`$gsea,
+  U87_acu = U87.GSEA$`acu_pH64-control_acu`$gsea
 )
 GO.object = list(
   U3017 = HGCC.GO$U3017$gsea,
   U3047 = HGCC.GO$U3047$gsea,
   U3054 = HGCC.GO$U3054$gsea,
   CCLD = CCLD.GO$gsea,
-  U87_CA = U87.GO$`sel_pH647-control_sel`$gsea,
-  U87_AA = U87.GO$`acu_pH64-control_acu`$gsea
+  U87_sel = U87.GO$`sel_pH647-control_sel`$gsea,
+  U87_acu = U87.GO$`acu_pH64-control_acu`$gsea
 
 )
 
@@ -568,12 +568,12 @@ tgfb.ranks = list(
   U3047 = which(HGCC.GSEA$U3047$df$ID == "hsa04350"),
   U3054 = which(HGCC.GSEA$U3054$df$ID == "hsa04350"),
   CCLD = which(CCLD.GSEA$df$ID == "hsa04350"),
-  U87_CA = which(U87.GSEA$`sel_pH647-control_sel`$df$ID == "hsa04350"),
-  U87_AA = which(U87.GSEA$`acu_pH64-control_acu`$df$ID == "hsa04350"))
+  U87_sel = which(U87.GSEA$`sel_pH647-control_sel`$df$ID == "hsa04350"),
+  U87_acu = which(U87.GSEA$`acu_pH64-control_acu`$df$ID == "hsa04350"))
 
 TGFB.enrichplot <- list()
 TGFB.enrichplot$TOTAL_scores  <- do.call(rbind, c(
-  lapply(names(tgfb.ranks)[1:4], function(i){
+  lapply(names(tgfb.ranks), function(i){
     gsInfo(tgfb.ranks[[i]], object = GSEA.object[[i]]) %>% 
       dplyr::mutate(source = i)}
     )))
@@ -581,7 +581,7 @@ TGFB.enrichplot$TOTAL_scores <- TGFB.enrichplot$TOTAL_scores %>%
   dplyr::mutate(
     Description = gsub(x = TGFB.enrichplot$TOTAL_scores$Description,
                        pattern = "KEGG_", replacement =  ""),
-    source = factor(source, levels = names(GSEA.object)[col_order]))
+    source = factor(source, levels = names(GSEA.object)[c(col_order,6,5)]))
 
 TGFB.enrichplot$TOTAL_table <- getEnrichmentTable(
   .df = rbind(HGCC.GSEA$U3017$df[tgfb.ranks$U3017,] %>% 
@@ -591,25 +591,33 @@ TGFB.enrichplot$TOTAL_table <- getEnrichmentTable(
               HGCC.GSEA$U3054$df[tgfb.ranks$U3054,] %>% 
                 dplyr::mutate(source = "U3054"),
               CCLD.GSEA$df[tgfb.ranks$CCLD,] %>% 
-                dplyr::mutate(source = "CCLD")),
-  .order = col_order, .name = "source")
+                dplyr::mutate(source = "CCLD"),
+              U87.GSEA$`acu_pH64-control_acu`$df[tgfb.ranks$U87_acu,] %>% 
+                dplyr::mutate(source = "U87_acu"),
+              U87.GSEA$`sel_pH647-control_sel`$df[tgfb.ranks$U87_sel,] %>%
+                dplyr::mutate(source = "U87_sel")),
+  .order = c(col_order,6,5), .name = "source")
 
-TGFB.enrichplot$TOTAL_plot <- cowplot::plot_grid(
+(TGFB.enrichplot$TOTAL_plot <- cowplot::plot_grid(
   plotRunningScore(.df = TGFB.enrichplot$TOTAL_scores, 
                          .x = "x", .y = "runningScore", 
                          .color = "source", .palette = c("U3017" = "pink",
                                                          "U3047" = "salmon",
                                                          "U3054" = "darkred",
-                                                         "CCLD" = "steelblue")),
+                                                         "CCLD" = "steelblue",
+                                                         "U87_acu" = "plum",
+                                                         "U87_sel" = "red")),
   plotGeneRank(.df = TGFB.enrichplot$TOTAL_scores, 
                      .x = "x", .facet = "source~.",
                      .color = "source", .palette = c("U3017" = "pink",
                                                      "U3047" = "salmon",
                                                      "U3054" = "darkred",
-                                                     "CCLD" = "steelblue")),
+                                                     "CCLD" = "steelblue",
+                                                     "U87_acu" = "plum",
+                                                     "U87_sel" = "red")),
   byrow = T, nrow = 2, ncol = 1, scale = .95, 
   rel_heights = c(1.2,1), axis = "r", #rel_widths =  c(1,2),
-  margins = c(0.5, 0.5, 0.5, 0.5))
+  margins = c(0.5, 0.5, 0.5, 0.5)))
 
 results_dir <-  "Results/HGCC"
 ggsave(file.path(results_dir, date, "plots", "TOTAL_TGFB_GSEA_enrichment_plot.svg"), bg = "white", device = "svg",
@@ -627,10 +635,10 @@ TGFB.enrichplot$U87_scores <- TGFB.enrichplot$U87_scores %>%
     source = factor(source, levels = names(GSEA.object)[6:5]))
 
 TGFB.enrichplot$U87_table <- getEnrichmentTable(
-  .df = rbind(U87.GSEA$`sel_pH647-control_sel`$df[tgfb.ranks$U87_CA,] %>% 
-                dplyr::mutate(source = "U87_CA"),
-              U87.GSEA$`acu_pH64-control_acu`$df[tgfb.ranks$U87_AA,] %>% 
-                dplyr::mutate(source = "U87_AA")),
+  .df = rbind(U87.GSEA$`sel_pH647-control_sel`$df[tgfb.ranks$U87_sel,] %>% 
+                dplyr::mutate(source = "U87_sel"),
+              U87.GSEA$`acu_pH64-control_acu`$df[tgfb.ranks$U87_acu,] %>% 
+                dplyr::mutate(source = "U87_acu")),
   .order = c(2,1), .name = "source")
 
 TGFB.enrichplot$U87_plot <- cowplot::plot_grid(
@@ -656,12 +664,12 @@ emt.ranks = list(
   U3047 = which(HGCC.GO$U3047$df$ID == "GO:0001837"),
   U3054 = which(HGCC.GO$U3054$df$ID == "GO:0001837"),
   CCLD = which(CCLD.GO$df$ID == "GO:0001837"),
-  U87_CA = which(U87.GO$`sel_pH647-control_sel`$df$ID == "GO:0001837"),
-  U87_AA = which(U87.GO$`acu_pH64-control_acu`$df$ID == "GO:0001837"))
+  U87_sel = which(U87.GO$`sel_pH647-control_sel`$df$ID == "GO:0001837"),
+  U87_acu = which(U87.GO$`acu_pH64-control_acu`$df$ID == "GO:0001837"))
 
 EMT.enrichplot <- list()
 EMT.enrichplot$TOTAL_scores  <- do.call(rbind, c(
-  lapply(names(emt.ranks)[1:4], function(i){
+  lapply(names(emt.ranks), function(i){
     gsInfo(emt.ranks[[i]], object = GO.object[[i]]) %>% 
       dplyr::mutate(source = i)}
   )))
@@ -669,7 +677,7 @@ EMT.enrichplot$TOTAL_scores <- EMT.enrichplot$TOTAL_scores %>%
   dplyr::mutate(
     Description = gsub(x = EMT.enrichplot$TOTAL_scores$Description,
                        pattern = "GOBP_", replacement =  ""),
-    source = factor(source, levels = names(GO.object)[c(3,1,4,2)]))
+    source = factor(source, levels = names(GO.object)[c(3,1,4,2,6,5)]))
 
 EMT.enrichplot$TOTAL_table <- getEnrichmentTable(
   .df = rbind(HGCC.GO$U3017$df[emt.ranks$U3017,] %>% 
@@ -679,25 +687,33 @@ EMT.enrichplot$TOTAL_table <- getEnrichmentTable(
               HGCC.GO$U3054$df[emt.ranks$U3054,] %>% 
                 dplyr::mutate(source = "U3054"),
               CCLD.GO$df[emt.ranks$CCLD,] %>% 
-                dplyr::mutate(source = "CCLD")),
-  .order = col_order, .name = "source")
+                dplyr::mutate(source = "CCLD"),
+              U87.GO$`acu_pH64-control_acu`$df[emt.ranks$U87_acu,] %>% 
+                dplyr::mutate(source = "U87_acu"),
+              U87.GO$`sel_pH647-control_sel`$df[emt.ranks$U87_sel,] %>%
+                dplyr::mutate(source = "U87_sel")),
+  .order = c(3,1,4,2,6,5), .name = "source")
 
-EMT.enrichplot$TOTAL_plot <- cowplot::plot_grid(
+(EMT.enrichplot$TOTAL_plot <- cowplot::plot_grid(
   plotRunningScore(.df = EMT.enrichplot$TOTAL_scores, 
                          .x = "x", .y = "runningScore", 
                          .color = "source", .palette = c("U3017" = "pink",
                                                          "U3047" = "salmon",
                                                          "U3054" = "darkred",
-                                                         "CCLD" = "steelblue")),
+                                                         "CCLD" = "steelblue",
+                                                         "U87_acu" = "plum",
+                                                         "U87_sel" = "red")),
   plotGeneRank(.df = EMT.enrichplot$TOTAL_scores, 
                      .x = "x", .facet = "source~.",
                      .color = "source", .palette = c("U3017" = "pink",
                                                      "U3047" = "salmon",
                                                      "U3054" = "darkred",
-                                                     "CCLD" = "steelblue")),
+                                                     "CCLD" = "steelblue",
+                                                     "U87_acu" = "plum",
+                                                     "U87_sel" = "red")),
   byrow = T, nrow = 2, ncol = 1, scale = .95, 
   rel_heights = c(1.2,1), axis = "r", #rel_widths =  c(1,2),
-  margins = c(0.5, 0.5, 0.5, 0.5))
+  margins = c(0.5, 0.5, 0.5, 0.5)))
 
 results_dir <-  "Results/HGCC"
 ggsave(file.path(results_dir, date, "plots", "TOTAL_EMT_GO_enrichment_plot.svg"), bg = "white", device = "svg",
@@ -715,10 +731,10 @@ EMT.enrichplot$U87_scores <- EMT.enrichplot$U87_scores %>%
     source = factor(source, levels = names(GO.object)[6:5]))
 
 EMT.enrichplot$U87_table <- getEnrichmentTable(
-  .df = rbind(U87.GO$`sel_pH647-control_sel`$df[emt.ranks$U87_CA,] %>% 
-                dplyr::mutate(source = "U87_CA"),
-              U87.GO$`acu_pH64-control_acu`$df[emt.ranks$U87_AA,] %>% 
-                dplyr::mutate(source = "U87_AA")),
+  .df = rbind(U87.GO$`sel_pH647-control_sel`$df[emt.ranks$U87_sel,] %>% 
+                dplyr::mutate(source = "U87_sel"),
+              U87.GO$`acu_pH64-control_acu`$df[emt.ranks$U87_acu,] %>% 
+                dplyr::mutate(source = "U87_acu")),
   .order = c(2,1), .name = "source")
 
 EMT.enrichplot$U87_plot <- cowplot::plot_grid(

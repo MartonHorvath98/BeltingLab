@@ -99,7 +99,7 @@ normalizeIllumina <- function(.df, .dbconn, .samples = colnames(.df$E)){
   x <- illuminaHumanv4ENTREZID
   
   #normalization and background correction
-    df <- neqc(.df)
+  df <- neqc(.df)
   # keep only selected samples
   df <- df[, .samples]
   #keep probes that are expressed in at least three arrays according to a detection p-values of 5%:
@@ -817,8 +817,9 @@ plot_network <- function(.net, .layout, .df){
     scale_fill_manual(values = c("UP" = "darkred", "DOWN" = "blue"),
                       labels = c("UP" = "Activated", "DOWN" = "Inhibited"),
                       name = c("Regulation"),
-                      guide = guide_legend(override.aes = c(size = 10))) +
-    scale_size_continuous(guide = "none", range=c(5,15)) +
+                      guide = guide_legend(order = 1, override.aes = c(size = 10))) +
+    scale_size_continuous(name = c("Authority score"), range = c(5,15), 
+                          guide = guide_legend(order = 2)) +
     theme_void() +
     theme(legend.title=element_text(size=28), 
           legend.text=element_text(size=28),
