@@ -1,18 +1,18 @@
 process INDEX {
     label "SALMON"
     tag "Salmon index on $genome"
-    publishDir params.reference, mode: 'copy'
+    storeDir params.reference
 
     input:
     path transcriptome
     path genome
 
     output:
-    path '${genome}.salmon.idx', emit: index
+    path '${genome.simpleName}.salmon.idx', emit: index
 
     script:
+    def index_name = genome.name + ".salmon.idx"
     """
-    # mkdir -p ${genome}.salmon.idx
     # Create decoy file
     grep "^>" ${genome} | cut -d " " -f 1 | sed -e 's/>//g' > decoys.txt
     # Concatenate transcriptome and genome files
@@ -21,7 +21,7 @@ process INDEX {
     salmon index \\
         --transcripts gentrome.fa \\
         --decoys decoys.txt \\
-        --index "${genome}.salmon.idx" \\
+        --index "${index_name}" \\
         -p $task.cpus \\
         ${params.index_args}
 
