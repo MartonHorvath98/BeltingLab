@@ -144,3 +144,22 @@
 2025-04-18 13:43:52	4.9s	serene_mendel	OK	b7fd5eb1064c20bd27b129d5e7820310	e043c663-9790-4e3f-81ce-50fe9e714972	nextflow run rnaseq.nf -with-docker gbm-docker -c nextflow.config -with-report core_workflow_report.html -with-timeline core_workflow_timeline.html -with-dag core_workflow_flowchart.png -resume
 2025-04-18 13:48:40	1m 1s	disturbed_ptolemy	ERR	4e4659a73f9f414fd2e1b3a6a635135f	e043c663-9790-4e3f-81ce-50fe9e714972	nextflow run rnaseq.nf -with-docker gbm-docker -c nextflow.config -with-report core_workflow_report.html -with-timeline core_workflow_timeline.html -with-dag core_workflow_flowchart.png -resume
 2025-04-18 14:48:35	52.3s	intergalactic_miescher	OK	4e4659a73f9f414fd2e1b3a6a635135f	e043c663-9790-4e3f-81ce-50fe9e714972	nextflow run rnaseq.nf -with-docker gbm-docker -c nextflow.config -with-report core_workflow_report.html -with-timeline core_workflow_timeline.html -with-dag core_workflow_flowchart.png -resume
+2025-04-18 19:46:56	5.7s	determined_plateau	OK	eb7e313ebd908ce5877187d49778d63e	e043c663-9790-4e3f-81ce-50fe9e714972	nextflow run core-workflow.nf -with-docker gbm-docker -c nextflow.config -with-report core_workflow_report.html -with-timeline core_workflow_timeline.html -with-dag core_workflow_flowchart.png -resume
+2025-04-21 18:27:22	2.8s	loving_snyder	ERR	b90a9e39d20f2ea4f56c994fcf47eb8e	d61223ca-8d3a-41a8-a163-00620fbb438f	nextflow run advanced-workflow.nf
+2025-04-21 18:29:36	2s	lonely_lagrange	OK	2e6e46e996a582325aea54c8ffd85ab2	fa2eba65-993a-4e37-8f55-f5402a9d7add	nextflow run advanced-workflow.nf
+2025-04-21 18:32:10	2.5s	awesome_wing	ERR	7f9ae17c82963c7a89a5d9f004f6f478	b886d7a9-53ec-4f41-ae5b-d68ec605f50d	nextflow run advanced-workflow.nf
+2025-04-21 18:34:15	3.3s	chaotic_pasteur	ERR	f183a2a7acb6eaf9f7f61ab11e34410b	a6f414af-c992-476d-8307-6894e19a10ae	nextflow run advanced-workflow.nf
+2025-04-21 18:36:52	4.2s	deadly_bernard	ERR	f183a2a7acb6eaf9f7f61ab11e34410b	a6f414af-c992-476d-8307-6894e19a10ae	nextflow run advanced-workflow.nf -resume
+2025-04-21 18:53:22	-	cheesy_kalman	-	920ecf49c9588a8f9c88a9f66a95fb72	a6f414af-c992-476d-8307-6894e19a10ae	nextflow run advanced-workflow.nf -resume
+2025-04-21 18:53:47	3.2s	fervent_lichterman	ERR	3dfed2db02ff457f160203b1c2dcfef4	a6f414af-c992-476d-8307-6894e19a10ae	nextflow run advanced-workflow.nf -resume
+2025-04-21 18:56:53	-	tender_archimedes	-	4395fbedfc04cc05f0bd2a80af30766d	a6f414af-c992-476d-8307-6894e19a10ae	nextflow run advanced-workflow.nf -resume
+2025-04-21 18:58:53	2.6s	romantic_tesla	OK	1b476ce6b761519c883448071d20f81a	4c121242-a450-489b-b8b2-f50cb15a3405	nextflow run advanced-workflow.nf
+2025-04-21 18:59:38	2.5s	elegant_wright	OK	6765a73d1c106a97fc9e6ea74f71b2eb	b66a39a0-a6b9-49ca-b17e-a1b8c7520a1b	nextflow run advanced-workflow.nf
+2025-04-21 19:00:01	10m 1s	evil_mandelbrot	ERR	64d8f53f81cefe7ff7e63657c9d8368e	58452557-8da8-4bac-a8ba-4d7f1e9f5bb1	nextflow run advanced-workflow.nf
+2025-04-21 19:12:28	3m 52s	distraught_plateau	ERR	64d8f53f81cefe7ff7e63657c9d8368e	1a350901-085f-4ff4-923d-4a081cde045b	nextflow run advanced-workflow.nf
+2025-04-21 19:17:02	12m 37s	cheeky_ptolemy	ERR	64d8f53f81cefe7ff7e63657c9d8368e	a1f5b470-9d0a-456e-90ca-35b73d63a95f	nextflow run advanced-workflow.nf
+2025-04-21 19:40:29	3m 41s	desperate_lagrange	ERR	80135d7359e9c4b01e2829c1af5c9203	ecc81b9b-119b-4ae1-be83-03779be7346c	nextflow run advanced-workflow.nf
+2025-04-21 20:25:22	3s	condescending_planck	ERR	80135d7359e9c4b01e2829c1af5c9203	319466fe-137f-474e-ae77-1e08ce2acffa	nextflow run advanced-workflow.nf -with-docker gbm-docker
+2025-04-21 20:26:02	1m 38s	intergalactic_yalow	ERR	80135d7359e9c4b01e2829c1af5c9203	77d0c050-8c10-4874-8e2a-8213a43f3136	nextflow run advanced-workflow.nf -with-docker gbm-docker
+2025-04-21 20:28:30	11m 35s	determined_becquerel	ERR	80135d7359e9c4b01e2829c1af5c9203	999947b8-90ad-4bd8-88dd-095340830a4e	nextflow run advanced-workflow.nf -with-docker gbm-docker
+2025-04-21 20:44:20	7m 52s	kickass_hypatia	ERR	80135d7359e9c4b01e2829c1af5c9203	6c394b46-1b4e-49ea-b84e-85f80a73ad44	nextflow run advanced-workflow.nf -with-docker gbm-docker

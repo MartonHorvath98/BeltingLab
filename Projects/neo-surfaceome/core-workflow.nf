@@ -19,12 +19,14 @@ def get_index_channel() {
 
 workflow {
     log.info """\
-    R N A S E Q - N F   P I P E L I N E
-    ===================================
-    transcriptome: ${params.transcriptome_file}
-    genome       : ${params.genome_file}
-    reads        : ${params.reads}
-    outdir       : ${params.outdir}
+    R N A S E Q - N F   C O R E - P I P E L I N E
+    =============================================
+    ctat-genome-lib reference : ${params.reference}
+    read meta file            : ${params.reads}
+    =============================================
+    STEP 1: TRIMMING (TRIM-GALORE)
+    STEP 2: QUANTIFICATION (SALMON)
+    STEP 3: REPORTING (MULTIQC)
     """
     .stripIndent(true)
     // Read in read fastq files
@@ -46,11 +48,6 @@ workflow {
     QUANTIFICATION(quant_input_ch)
     // Create MultiQC report
     report_ch = TRIM_GALORE.out.fastqc_report.mix(QUANTIFICATION.out.quant_files.map{ it[1] })
-    report_ch.view { it ->
-        log.info "MultiQC report will be generated from ${it.size()} files"
-    }.collect().view{
-        log.info "MultiQC report will be generated from: ${it}"
-    }
     MULTIQC(report_ch.collect())
 }
 
