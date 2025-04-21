@@ -1,0 +1,23 @@
+process INDEX {
+    label "STAR"
+    tag "STAR index on $genome"
+    storeDir params.reference
+
+    input:
+    path genome
+    path gtf
+
+    output:
+    path '${genome.simpleName}.star.idx', emit: index
+
+    script:
+    def index_name = genome.name + ".star.idx"
+    """
+    STAR --runMode genomeGenerate \\
+         --runThreadN $task.cpus \\
+         --genomeDir $index_name \\
+         --genomeFastaFiles $genome \\
+         --sjdbGTFfile $gtf \\
+         ${params.star_index_args}
+    """
+}
