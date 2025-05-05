@@ -1,5 +1,5 @@
 process MULTIQC {
-    label "MULTIQC"
+    label 'low_effort'
     publishDir params.report_outdir, mode:'copy'
 
     input:
@@ -9,7 +9,9 @@ process MULTIQC {
     path 'multiqc_report.html'
 
     script:
+    def module = params.environment == 'uppmax' ? 'module load MultiQC/1.10.1' : ''
     """
+    ${module}
     multiqc .
     """
 }

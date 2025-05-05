@@ -1,7 +1,6 @@
 process TRIM_GALORE {
+    label 'low_effort'
     tag "Trim-galore on $sample"
-    label "TRIM"
-
     publishDir params.trim_outdir, mode: 'copy'
 
     input:
@@ -12,7 +11,10 @@ process TRIM_GALORE {
     path '*_trimming_report.txt', emit: fastqc_report
 
     script:
+    def module = params.environment == 'uppmax' ? 'module load TrimGalore/0.6.1' : ''
     """
+    ${module}
+    echo "TRIM_GALORE run on executor ${task.executor}"
     echo "READ1: ${read1}"
     echo "READ2: ${read2}"
     name=\$(sed 's/Sample_//g' <<< ${sample})

@@ -1,5 +1,5 @@
 process INDEX {
-    label "STAR"
+    label "thicc"
     tag "STAR index on $genome"
     storeDir params.reference
 

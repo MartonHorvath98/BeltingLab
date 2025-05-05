@@ -5,6 +5,7 @@
  */
 include { INDEX } from './modules/star/index/main.nf'
 include { ALIGNMENT } from './modules/star/align/main.nf'
+include { FUSION } from './modules/star-fusion/main.nf'
 /*
  * pipeline functions
  */
@@ -44,9 +45,12 @@ workflow {
     /*
      * FUSION EVENT DETECTION USING STAR-FUSION
      */
-    fusion_input_ch = ALIGNMENT.out.bam_files
-                               .view{ "Fusion input: $it" }
-    STAR_FUSION(fusion_input_ch)
+    fusion_input_ch = input_ch
+    .join(ALIGNMENT.out.junction, by: 0)
+    .map { sample_id, trim1, trim2, junction ->
+        tuple(params.reference, sample_id, trim1, trim2, junction)
+    }
+    FUSION(fusion_input_ch)
 
 }
 

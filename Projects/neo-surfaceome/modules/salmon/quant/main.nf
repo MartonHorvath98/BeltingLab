@@ -1,7 +1,6 @@
-process QUANTIFICATION {
+process QUANTIFICATION {    
+    label 'thicc'
     tag "Salmon on $sample_id"
-    label "SALMON"
-
     publishDir params.quant_outdir, mode: 'copy'
 
     input:
@@ -12,7 +11,10 @@ process QUANTIFICATION {
     tuple val(sample_id), path("${sample_id}"), emit: quant_files
     
     script:
+    def module = params.environment == 'uppmax' ? 'module load Salmon/1.10.1' : ''
     """
+    ${module}
+    
     salmon quant --threads $task.cpus \\
         $params.quant_args \\
         -i $salmon_index \\

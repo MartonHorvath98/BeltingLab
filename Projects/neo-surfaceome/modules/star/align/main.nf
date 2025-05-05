@@ -1,6 +1,6 @@
 process ALIGNMENT {
     tag "STAR alignment on $sample_id"
-    label "STAR"
+    label "thicc"
 
     publishDir params.star_outdir, mode: 'copy'
 
