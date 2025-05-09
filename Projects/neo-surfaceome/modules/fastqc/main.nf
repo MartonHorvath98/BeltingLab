@@ -9,7 +9,8 @@ process FASTQC {
     val subfolder
 
     output:
-    path "$subfolder/${sample_id}/*_fastqc.zip"
+    path "versions.yml"                         , emit: versions
+    path "$subfolder/${sample_id}/*_fastqc.zip" , emit: fastqc_report
 
     script:
     def memory = "${task.memory.toMega()}"
@@ -20,6 +21,11 @@ process FASTQC {
         ${params.fastqc_args} --memory $memory \\
         --threads ${task.cpus} \\
         ${read1} ${read2}
+
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+        fastqc: \$( fastqc --version | sed '/FastQC v/!d; s/.*v//' )
+    END_VERSIONS
     """
 
 }

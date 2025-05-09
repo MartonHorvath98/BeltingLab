@@ -3,12 +3,12 @@
 /*
  * Import processes from modules
  */
-include { FASTQC as PRE_FASTQC} from './modules/fastqc/main.nf'
-include { FASTQC as POST_FASTQC} from './modules/fastqc/main.nf'
-include { SEQKIT as PRE_SEQKIT} from './modules/seqkit/main.nf'
-include { SEQKIT as POST_SEQKIT} from './modules/seqkit/main.nf'
+include { FASTQC as PRE_FASTQC } from './modules/fastqc/main.nf'
+include { FASTQC as POST_FASTQC } from './modules/fastqc/main.nf'
+include { SEQKIT as PRE_SEQKIT } from './modules/seqkit/main.nf'
+include { SEQKIT as POST_SEQKIT } from './modules/seqkit/main.nf'
 include { TRIM_GALORE } from './modules/trim_galore/main.nf'
-include { MULTIQC} from './modules/multiqc/main.nf'
+include { MULTIQC } from './modules/multiqc/main.nf'
 include { SALMON_INDEX as INDEX } from './modules/salmon/index/main.nf'
 include { QUANTIFICATION } from './modules/salmon/quant/main.nf'
 /*
@@ -63,10 +63,11 @@ workflow {
     quant_input_ch = index_ch.combine(TRIM_GALORE.out.trimmed_reads)
     QUANTIFICATION(quant_input_ch)
     // Create MultiQC report
-    report_ch = TRIM_GALORE.out.fastqc_report.mix(
-        PRE_FASTQC.out,
-        POST_FASTQC.out,
+    report_ch = TRIM_GALORE.out.log.map{ it[1] }.mix(
+        PRE_FASTQC.out.fastqc_report.map{ it[1] },
+        POST_FASTQC.out.fastqc_report.map{ it[1] },
         QUANTIFICATION.out.quant_files.map{ it[1] })
+    // Collect all reports and create a MultiQC report
     MULTIQC(report_ch.collect())
 }
 

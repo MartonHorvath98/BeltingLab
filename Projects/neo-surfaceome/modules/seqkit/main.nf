@@ -9,7 +9,8 @@ process SEQKIT {
     val subfolder
 
     output:
-    path "$subfolder/${sample_id}_stats.tsv"
+    path "$subfolder/${sample_id}_stats.tsv", emit: stats
+    path "versions.yml", emit: versions
 
     script:
     """
@@ -23,6 +24,11 @@ process SEQKIT {
 
     rm ${subfolder}/R1.txt
     rm ${subfolder}/R2.txt
+
+    cat <<-END_VERSIONS >> versions.yml
+    "${task.process}":
+        seqkit: \$( seqkit version | sed 's/seqkit v//' )
+    END_VERSIONS
     """
 
 }

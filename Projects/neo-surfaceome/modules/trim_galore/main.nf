@@ -8,12 +8,12 @@ process TRIM_GALORE {
 
     output:
     tuple val(sample), file('*_val_1.fq.gz'), file('*_val_2.fq.gz'), emit: trimmed_reads
-    path '*_trimming_report.txt', emit: fastqc_report
+    tuple val(sample), path("*report.txt"), emit: log, optional: true
+    path "versions.yml", emit: versions
+
 
     script:
-    def module = params.environment == 'uppmax' ? 'module load TrimGalore/0.6.1' : ''
     """
-    ${module}
     echo "TRIM_GALORE run on executor ${task.executor}"
     echo "READ1: ${read1}"
     echo "READ2: ${read2}"
@@ -23,6 +23,12 @@ process TRIM_GALORE {
      -j $task.cpus \\
      $params.trim_args \\
      --basename \$name
+
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+        trimgalore: \$(echo \$(trim_galore --version 2>&1) | sed 's/^.*version //; s/Last.*\$//')
+        cutadapt: \$(cutadapt --version)
+    END_VERSIONS
     """
 
 }
