@@ -28,6 +28,7 @@ rawdata/
 results/
 plots/
 report/ 
+database/
 
 # Reference genome
 ctat-genome-lib/
