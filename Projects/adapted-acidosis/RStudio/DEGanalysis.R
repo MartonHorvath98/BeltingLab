@@ -399,7 +399,8 @@ U87.subset <- list()
 
 U87.subset$logexp <- U87.expr %>%
   dplyr::select(!ENTREZID) %>% 
-  dplyr::filter(SYMBOL %in% interest_genes) 
+  dplyr::filter(SYMBOL %in% interest_genes & 
+                  PROBEID %in% U87.deg$`sel_pH647-control_sel`$ID.ID) 
 
 U87.subset$exp <- U87.subset$logexp %>% 
   dplyr::mutate(across("200118400068_I":"200118400033_I", ~ 2^.))
