@@ -15,7 +15,7 @@ process GTF2REFFLAT {
         -genePredExt \\
         -geneNameAsName2 \\
         "${params.gtf_annot}" \\
-        "ref_annot.refFlat.tmp.txt" \\
+        "ref_annot.refFlat.tmp.txt"
     
     # Parse genePred file to UCSC refFlat format
     paste <(cut -f 12 ref_annot.refFlat.tmp.txt) <(cut -f 1-10 ref_annot.refFlat.tmp.txt) > ref_annot.refFlat.txt
