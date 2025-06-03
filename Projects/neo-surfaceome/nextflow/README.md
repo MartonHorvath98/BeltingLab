@@ -82,7 +82,7 @@ uppmax {
 ```
 Nextflow provides an abstraction between the pipeline's functional logic and the underlying execution system, thus the same process can get the next two example headers based on the profile selected on the command line from the configuration file:
 ```bash
-nextflow run complete-workflow -C $NXF_HOME/nextflow.config -profile 'local'
+nextflow run main.nf -C $NXF_HOME/nextflow.config -profile 'local'
 ```
 The example header:
 ```bash
@@ -90,7 +90,7 @@ The example header:
 ```
 BUT, if:
 ```bash
-nextflow run complete-workflow -C $NXF_HOME/nextflow.config -profile 'uppmax'
+nextflow run main.nf -C $NXF_HOME/nextflow.config -profile 'uppmax'
 ```
 The example header:
 ```bash
@@ -207,16 +207,27 @@ We define pipeline paramteres in the config file using the `params` scope. Users
 
 # 3. Subworkflows 
 
-[:rewind:](../README.md#bioinformatical-pipeline) *Return to the main README file, if you used the link to the Nextflow configurations, before proceeding...*  
+:rewind: *[Return](../README.md#bioinformatical-pipeline) to the main README file, if you used the link to the Nextflow configurations, before proceeding...* 
 
-## 3.1. Core Analysis
+Subworkflows are named workflows that can be called by other workflows, in our case only by the entry workflow (`complete-workflow.nf`). In named (sub)workflows a `take:` section is used to declare the input channels, and the `emit:` section is used to declare the output channels. Inputs can be specified just like arguments when calling the workflow and the output channels can be accessed using the `out` property similarly to how it works in processes.
 
-This subworkflow integrates (i) pre-trim QC using FastQC (v0.12.1), (ii) trimming using the TrimGalore suite (v0.6.10), (iii) post-trim QC with FastQC and SeqKit (v2.10), and (iv) isoform-level quantification using Salmon (v1.10.1) in mapping-based mode.
+## 3.1. Core workflow
+
+This subworkflow integrates:
+1. pre-trim QC using FastQC (v0.12.1) and SeqKit (v2.10)
+2. trimming using the TrimGalore suite (v0.6.10) 
+3. post-trim QC with FastQC and SeqKit
+4. isoform-level quantification using Salmon (v1.10.1) in mapping-based mode
 
 ### Quality check (QC) - `modules/fastqc/main.nf`
 
+We used [FastQC](https://www.bioinformatics.babraham.ac.uk/projects/fastqc/) (v0.12.1) to execute simple quality control checks on raw and trimmed sequence data. It provides a modular set of analyses: importing FastQ files, providing a quick overview to tell us about problems, and creating summary graphs and tables to quickly assess the data.
+
 ```groovy
 process FASTQC {
+    // Directives
+    // input:
+    // output:
     script:
     """
     mkdir -p $subfolder/${sample}
@@ -235,12 +246,12 @@ process FASTQC {
 ```
 Transcribed to:
 ```bash
-# e.g. pre-trim on VI-3429-593-2DH-1
-mkdir -p pre-trim/VI-3429-593-2DH-1
+# e.g. raw_data on VI-3429-593-2DH-1
+mkdir -p raw_data/VI-3429-593-2DH-1
 
-trim_galore \
-    -O pre-trim/VI-3429-593-2DH-1 \
-    -q 20 --length 36 --paired --illumina \
+fastqc \
+    -O raw_data/VI-3429-593-2DH-1 \
+    -f fastq -q \
     VI-3429-593-2DH-1_R1_001.fastq.gz VI-3429-593-2DH-1_R2_001.fastq.gz
 ```
 *e.g.: FastQC over-represented sequences fails VI-3429-593-2DH-1_R1_001.fastq.gz:*
@@ -252,98 +263,311 @@ trim_galore \
 
 Following a prelimnary quality assessment with FastQC, we can say that the overall quality of the bases is high, over the required treshold, however there is a high precentage of adapter contamination. Every adapter match seems to fall under the Illumina adapters' list, so the flag `--illumina` will be included in the trimming! 
 
-### Trimming - modules/trim_gelore/main.nf
+### Trimming - `modules/trim_galore/main.nf`
 
+Quality assessment is performed using the [TrimGalore](https://www.bioinformatics.babraham.ac.uk/projects/trim_galore/) suite (v0.6.1), which is a wrapper script around Cutadapt, a semi-global aligner algorithm (also called free-shift). It means that the sequences are allowed to freely shift relative to each other and differences are only penalised in the overlapping region between them. The algorithm works using unit costs (alignment score) to find the optimal overlap alignments, where positive value is assigned to matching bases and penalties are given for mismatches, inserts or deletions.
 
-Quality assessment is performed using the TrimGalore suite (v0.6.1), which is a wrapper script around Cutadapt, a semi-global aligner algorithm (also called free-shift). It means that the sequences are allowed to freely shift relative to each other and differences are only penalised in the overlapping region between them. The algorithm works using unit costs (alignment score) to find the optimal overlap alignments, where positive value is assigned to matching bases and penalties are given for mismatches, inserts or deletions.
+```groovy
+process TRIM_GALORE {
+    // Directives
+    // input:
+    // output:
+    script:
+    """    
+    trim_galore ${read1} ${read2} \\
+     -j $task.cpus \\
+     --gzip \\
+     $params.trim_args \\
+
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+        trimgalore: \$(echo \$(trim_galore --version 2>&1) | sed 's/^.*version //; s/Last.*\$//')
+        cutadapt: \$(cutadapt --version)
+    END_VERSIONS
+    """
+}
+```
+Transcribed to:
+```bash
+# e.g. VI-3429-593-2DH-1
+trim_galore VI-3429-593-2DH-1_R1_001.fastq.gz VI-3429-593-2DH-1_R2_001.fastq.gz\
+    -J 4 \
+    --gzip \
+    -q 20 --length 36 --paired --illumina
+```
+*e.g.: Trim galore log of sample VI-3429-593-2DH-1, trimming  \*R1_001.fastq.gz & \*R2_001.fastq.gz:*
+| === Summary === | |
+| --- | --- |
+| Total reads processed: | 99,262,678 |
+| Reads with adapters: | 61,605,480 (62.1%) |
+| Reads written (passing filters): | 99,262,678 (100.0%) |
+| Total basepairs processed: | 14,988,664,378 bp | 
+| Quality-trimmed: | 19,015,148 bp (0.1%) | 
+| Total written (filtered): | 13,252,226,643 bp (88.4%) |
 
 >[!IMPORTANT]
 > ***It is important to check that sequence quality is similar for all samples and discard outliers. As a general rule, read quality decreases towards the 3’ end of reads, and if it becomes too low, bases should be removed to improve mappability. The quality and/or adapter trimming may result in very short sequences (sometimes as short as 0 bp), and since alignment programs may require sequences with a certain minimum length to avoid crashes to short fragments (in the case above, below 36 bases: --length 36) should not be considered either.***
 
 
-### Isoform-level quantification
+### Isoform-level quantification via Salmon - `module/salmon/quant/main.nf`
 
-For read quantification we used the Salmon (v1.10.1), a fast and lightweight method for quantifying transcript abundance from RNA–seq reads. 
-Prepare reference genome
+For read quantification we used the [Salmon](https://salmon.readthedocs.io/en/latest/salmon.html) (v1.10.1), a fast and lightweight method for quantifying transcript abundance from RNA–seq reads. 
 
+```groovy
+process SALMON_QUANT {    
+    // Directives
+    // input:
+    // output:
+    script:
+    """
+    salmon quant --threads $task.cpus \\
+        $params.quant_args \\
+        -i $salmon_index \\
+        -1 ${trim1} -2 ${trim2} \\
+        -o $sample_id
 
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+        salmon: \$(echo \$(salmon --version) | sed -e "s/salmon //g")
+    END_VERSIONS
+    """
+}
+```
+Transcribed to:
+```bash
+# e.g. VI-3429-593-2DH-1
+salmon quant --threads 16 \\
+        -l ISR \\
+        -i ref_genome.salmon.idx \\
+        -1 VI-3429-593-2DH-1_R1_001_val_1.fq.gz -2 VI-3429-593-2DH-1_R2_002_val_2.fq.gz \\
+        -o VI-3429-593-2DH-1
+```
+> [!IMPORTANT]
+> It is important to learn the strandedness of the experiment. Here - `ISR` - we knew that the used protocol, Illumina, preserve the original RNA sequence, that is the first strand. If we are not aware of the method and the strandedness used during the sequencing, before starting the data analysis we can learn about the directionality of the reads using the `infer_experiment.py` algorithm from the [RSeQC](https://rseqc.sourceforge.net/) program.
 
-## 2.3. Read mapping
+> [!NOTE]
+> Actually, the Salmon developer team recommends allocating only 8 — 12 threads, to reach the maximum speed, threads allocated above this limit will likely spend most of their time idle / sleeping.
+
+#### Preparing a genome index - `module/salmon/index/main.nf`
+
+To run Salmon in mapping-based mode, first we have to build a salmon index using a decoy-aware transcriptome file, that we can create by creating a decoy file:
+```bash
+grep "^>" ${genome} | cut -d " " -f 1 | sed -e 's/>//g' > decoys.txt    
+``` 
+And concatenating the transcriptome and genome files, to run the index building on this generated `gentrome.fa`. The internal function `get_index_channel()` checks if the index has previously been created, otherwise calls appropriate process:
+```groovy 
+def get_index_channel() {
+    def index_path = file(params.salmon_index)
+    return index_path.exists()
+        ? Channel.value(index_path)
+        : INDEX(params.transcriptome_file, params.genome_file) }
+```
+
+## 3.2. Alignment workflow
+
+This subworkflow integrates:
+1. splice-aware genome-guided alignment using STAR (v2.7.8a)
+2. collecting an array of alignment metrics using Picard tools (v3.1.1)
+
+### Read mapping - `modules/star/align/main.nf`
 
 >[!NOTE]
 >*Besides the STAR mapper algorithm, Samtools is used for processing and analysing the data. It includes tools for file format conversion and manipulation, sorting, querying, and statistics amongst other methods.*
 
-We align the RNA-seq reads to a genome with STAR in order to identify abnormal splicing events and chimeras (fusion genes) with the help of the `sbatch_STAR.sh` script. Following the alignment we will use **STAR-fusion (v1.10.1)** to identify candidate fusion transcripts supported by the Illumina reads.
+We align the RNA-seq reads to a genome with STAR in order to identify single nucleotide variants (SNVs) and chimeras (fusion genes).
+```groovy
+process STAR_ALIGN {    
+    // Directives
+    // input:
+    // output:
+    script:
+    """
+    STAR \\
+		--runThreadN "$task.cpus" \\
+		--genomeDir "${star_index}" \\
+		--readFilesCommand "gunzip -c" \\
+		--readFilesIn ${trim1} ${trim2} \\
+		--outFileNamePrefix "${sample}-" \\
+		${star_args}
 
-```bash
-# Read the trimmed forward and reverse reads
-echo "Aligning reads with STAR on sample: ${sample}"
-    
-fw_read=${INPUT_DIR}${sample}_R1_001_val_1.fq.gz
-rv_read=${INPUT_DIR}${sample}_R2_001_val_2.fq.gz
-
-# Align reads with STAR
-STAR --runThreadN ${CORES}
-  --twopassMode Basic
-  --genomeDir ${REF} 
-    --readFilesIn ${fw_read} ${rv_read}
-    --readFilesCommand "gunzip -c"
-    --outSAMtype BAM SortedByCoordinate
-    --outBAMcompression 6
-    --outSAMstrandField intronMotif
-    --outSAMunmapped Within
-    --outFileNamePrefix "${OUTPUT_DIR}${sample}-"
-    --outReadsUnmapped None
-    --outFilterScoreMinOverLread 0
-    --outFilterMatchNminOverLread 0
-    --outFilterMatchNmin 0
-    --outFilterMismatchNmax 2
-    --alignSJstitchMismatchNmax 5 -1 5 5
-    --alignIntronMin 10
-    --alignIntronMax 100000
-    --alignMatesGapMax 100000
-    --chimOutType Junctions # **essential** to create the Chimeric.junction.out file for STAR-Fusion
-    --chimSegmentMin 12
-    --chimJunctionOverhangMin 8 # **essential to invoke chimeric read detection & reporting**
-    --chimOutJunctionFormat 1 # **essential** includes required metadata in Chimeric.out.junction file.
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+        STAR: \$(STAR --version | sed 's/STAR_//')
+    END_VERSIONS
+    """
+}
 ```
-During the alignment step the applied parameters mean:
-- `--runThreadN [INT]` – number of cores,
-- `--genomeDir` – path to the reference STAR index,
-- `--readFilesIn [R1] [R2]` – mate 1s and mate 2s reads,
-- `--readFilesCommand ["gunzip -c"]` – STAR cannot work with compressed input files, so we have to create temporary unzipped versions of the trimmed fastq files
-- `--outSAMtype 'BAM SortedByCoordinate'` – makes sure that the output is in sorted BAM format,
-- `--outBAMcompression [INT]` – defines the compression rate of the output files (on a 0 to 10 scale, *default:6*),
-- `--outFileNamePrefix` – prefix to indetify unique outputs,
+Transcribed to:
+```bash        
+# e.g. VI-3429-593-2DH-1
+STAR \
+    --runThreadN 16 \
+    --genomeDir ref_genome.star.idx \
+    --readFilesCommand "gunzip -c" \
+    --twopassMode Basic \
+    --readFilesIn VI-3429-593-2DH-1_R1_001_val_1.fq.gz VI-3429-593-2DH-1_R2_002_val_2.fq.gz \
+    --outFileNamePrefix VI-3429-593-2DH-1 \
+    --chimOutType Junctions \ # **essential** to create the Chimeric.junction.out file for STAR-Fusion
+	--chimSegmentMin 12 \
+	--chimJunctionOverhangMin 8 \  # **essential to invoke chimeric read detection & reporting**
+	--chimOutJunctionFormat 1 \ # **essential** includes required metadata in Chimeric.out.junction file
+	--outSAMtype BAM SortedByCoordinate \
+	--outBAMcompression 6 \
+	--outSAMstrandField intronMotif \
+	--outSAMunmapped Within \
+	--outReadsUnmapped None \
+	--outFilterScoreMinOverLread 0 \
+	--outFilterMatchNminOverLread 0 \
+	--outFilterMatchNmin 0 \
+	--outFilterMismatchNmax 2 \
+	--alignSJstitchMismatchNmax 5 -1 5 5 \
+	--alignIntronMin 10 \
+	--alignIntronMax 100000 \
+	--alignMatesGapMax 100000
+```
+During the alignment step the following **crucial** parameters are applied:
 - `--twopassMode Basic` – enambles the most sensitive novel splice junction discovery: during the 1st pass STAR maps with the usual parameters, then in hte 2nd pass it collects the previously detected junctions and uses the mas "annotated" junctions, what allows to detect more spliced reads mapping to novel junctions, 
 - `--chimOutType Junctions` – outputs the chimeric alignments to a separate file, called *"Chimeric.out.junction"*, that is the input file for STAR-Fusion,
 - `--chimOutJunctionFormat 1` – is essential to include required metadata in Chimeric.junction.out file for STAR-Fusion,
 - `--chimSegmentMin [INT]` – detect fusions that map to two chromosomes, with a minimum length above [INT] on either chromosome, this parameter is essential to start chimeric read detection and reporting
 
-## 2.4. Fusion detection
+> [!NOTE]
+> The STAR reference index is precompiled in the CTAT-genome-lib, but as a failsafe we also included the reference generating script `STAR --runMode genomeGenerate` with the same `get_index_channel()` function, we used for Salmon to check missingness. 
 
-In the next step of analysis we identify the chimeras that align to two chromosomes, each segment longer than the threshold set with `--chimSegmentMin`. STAR-Fusion is part of the suite of tools, [Trinity Cancer Transcriptome Analysis Toolkit (CTAT)](https://github.com/NCIP/Trinity_CTAT/wiki), focused on identifying and characterizing fusion transcripts in cancer. The Trinity CTAT ecosystem of tools requires a CTAT genome lib, which is effectively a resource package containing a target genome, reference annotations, and various meta data files that support fusion-finding. On BIANCA a pre-compiled CTAT genome lib is available that I am going to use. Predicted fusions are then 'in silico validated' using FusionInspector, which performs a more refined exploration of the candidate fusion transcripts, runs Trinity to de novo assemble fusion transcripts from the RNA-Seq reads, and provides the evidence in a suitable format to facilitate visualization. Predicted fusions are annotated according to prior knowledge of fusion transcripts relevant to cancer biology (or previously observed in normal samples and less likely to be relevant to cancer), and assessed for the impact of the predicted fusion event on coding regions, indicating whether the fusion is in-frame or frame-shifted along with combinations of domains that are expected to exist in the chimeric protein.
+### Alignment QC - `modules/picard/rnametrics/main.nf`
 
+Tools, namely the `CollectRnaSeqMetrics` command from the [Picard tools](https://broadinstitute.github.io/picard/) suite (v3.1.1) was used for QC after mapping. 
+We produced statistics to gather the necessary information about the success of the alignment, checking the quality of the mapping process: the percentage of mapped reads, the ratio of multi-mapped reads and reads that passed machine signal-to-noise threshold quality filters. These global indicators show the overall sequencing accuracy and of the presence of contaminating DNA. This tool also calculates the total numbers and the fractions of nucleotides within specific genomic regions including untranslated regions (UTRs), introns, intergenic sequences (between discrete genes), and peptide-coding sequences (exons).
+```groovy
+process PICARD_RNAMETRICS {  
+    // Directives
+    // input:
+    // output:
+    script:
+    """
+    # Collect RNA-seq metrics
+    java -jar \$PICARD CollectRnaSeqMetrics \\
+        -I ${bam_file} \\
+        -O "${sample}.rna_metrics.txt" \\
+        --REF_FLAT ${ref_flat} \\
+        --REFERENCE_SEQUENCE ${fasta} \\
+        --RIBOSOMAL_INTERVALS ${rrna_intervals} \\
+        ${params.picard_metrics_args}
+    
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+        picard: \$(echo \$(java -jar \$PICARD CollectRnaSeqMetrics 2>&1) | grep -oP "(?<=Version:).+?(?=\\ )")
+    END_VERSIONS
+    """
+}
+```
+Transcribed to:
 ```bash
-echo "Detecting gene fusions on sample: ${sample}"
-JUNCTIONS="${INPUT_DIR}${sample}-Chimeric.out.junction"
-        
-OUTPUT_DIR="${FUSION_DIR}${sample}/"
-mkdir -p "${OUTPUT_DIR}"
+# e.g. VI-3429-593-2DH-1
+java -jar $PICARD CollectRnaSeqMetrics \
+    -I "VI-3429-593-2DH-1-Aligned.SortedByCoord.bam" \
+    -O "VI-3429-593-2DH-1.rna_metrics.txt" \
+    --REF_FLAT "ref_annot.refFlat.txt" \
+    --REFERENCE_SEQUENCE "ref_genome.fa" \
+    --RIBOSOMAL_INTERVALS "rRNA_intervals.txt" \
+    --STRAND SECOND_READ_TRANSCRIPTION_STRAND \
+    --ASSUME_SORTED true
+```
+>[!IMPORTANT]
+> On its input, this tools requires valid SAM/BAM file(s), a tab-delimited file REF_FLAT file containing information about the location of other transcripts, exon start and stop sites, etc., and (optinally) a file including the location of rRNA sequences in the genome, in interval_list format. 
+
+This last two files are not available by default in the CTAT-genome-lib, so we created them, using custom scripts:
+```bash
+# Sequence names and lengths. (Must be tab-delimited.)
+cut -f1,2 "${params.genome_file}.fai" | \
+    perl -lane 'print "\@SQ\tSN:$F[0]\tLN:$F[1]\tAS:GRCh38"' | \
+    grep -v _ >> "rRNA_intervals.txt"
+# Intervals for rRNA transcripts.
+grep 'gene_type "rRNA"' "${params.gtf_annot}" | \
+    awk '$3 == "transcript"' | \
+    cut -f1,4,5,7,9 | \
+    perl -lane '/transcript_id "([^"]+)"/ or die "no transcript_id on $.";
+                print join "\t", (@F[0,1,2,3], $1)' | \
+    sort -k1V -k2n -k3n >> "rRNA_intervals.txt"
+
+# Convert GTF to genePred format
+gtfToGenePred \\
+    -genePredExt \\
+    -geneNameAsName2 \\
+    "${params.gtf_annot}" \\
+    "ref_annot.refFlat.tmp.txt"
+# Parse genePred file to UCSC refFlat format
+paste <(cut -f 12 ref_annot.refFlat.tmp.txt) <(cut -f 1-10 ref_annot.refFlat.tmp.txt) > ref_annot.refFlat.txt
+rm ref_annot.refFlat.tmp.txt
+gzip ref_annot.refFlat.txt
+```
+
+## 3.3. Fusion workflow
+
+This subworkflow integrates:
+1. Fusion detection using STAR-fusion (v1.10.1)
+2. Validation using FusionInspector
+3. And *de novo* fusion transcript reconstruction using Trinity (v2.14.0)
+
+## 2.4. Fusion detection - `modules/star_fusion/main.nf`
+
+Following the alignment we used [STAR-fusion](https://github.com/STAR-Fusion/STAR-Fusion/wiki) (v1.10.1) to identify candidate fusion transcripts - chimeras - that align to two chromosomes, each segment longer than the threshold set with `--chimSegmentMin`. Since, STAR aligner was run *a priori*, we ran STAR-fusion in "**Kickstart mode**" using the existing  'Chimeric.junction.out' output files. 
+
+> [!NOTE]
+> Since we experienced trouble with running STAR-fusion in 'kickstart mode' according to the provider's instructions, I used bith the junction file and the raw read inputs, which solved this issue.
+
+Predicted fusions were then 'in silico validated' using [FusionInspector](https://github.com/FusionInspector/FusionInspector/wiki/installing-FusionInspector), which performs a more refined exploration of the candidate fusion transcripts, runs [Trinity](https://github.com/trinityrnaseq/trinityrnaseq/wiki) to *de novo* assemble fusion transcripts from the RNA-Seq reads, and provides the evidence in a suitable format to facilitate visualization. Predicted fusions are annotated according to prior knowledge of fusion transcripts relevant to cancer biology (or previously observed in normal samples and less likely to be relevant to cancer), and assessed for the impact of the predicted fusion event on coding regions, indicating whether the fusion is in-frame or frame-shifted along with combinations of domains that are expected to exist in the chimeric protein.
+```groovy
+process FUSION {
+    // Directives
+    // input:
+    // output:
+    script:
+    """
+    STAR-Fusion \\
+        --genome_lib_dir ${genome_lib_dir} \\
+        --left_fq ${trim1} \\
+        --right_fq ${trim2} \\
+        -J ${junction} \\
+        --CPU ${task.cpus} \\
+        --output_dir . \\
+        ${params.fusion_args}
+
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+        STAR-Fusion: \$(STAR-Fusion --version 2>&1 | grep -i 'version' | sed 's/STAR-Fusion version: //')
+    END_VERSIONS
+    """
+}
+```
+Transcribed to:
+```bash
+# e.g. VI-3429-593-2DH-1
 STAR-Fusion \ 
-  --genome_lib_dir "${CTAT}" \ 
-  --chimeric_junctions "${junction_file}" \ 
+  --genome_lib_dir ctat-genome-lib \ 
+  --chimeric_junctions VI-3429-593-2DH-1-Chimeric.junction.out \ 
   --FusionInspector validate \ 
   --denovo_reconstruct \ 
   --examine_coding_effect \ 
-  --output-dir "${OUTPUT_DIR}" 
+  --output-dir VI-3429-593-2DH-1
 ```
- Running parameters:
+Running parameters:
 - `--genome_lib_dir [PATH]` – path to the CTAT genome lib,
 - `-J/--chimeric_junctions [PATH]` – accession path to the 'Chimeric.out.junction' file created by STAR
 - `--FusionInspector 'validate'` – requires the candidates (in a format: geneA--geneB) from the first column of the 'Chimeric.out.junction' file, then aligns them to the genome to identify those reads that align concordantly as fusion evidence to the fusion contigs,
 - `--denovo_reconstruct` – *de novo* reconstruction of fusion transcripts using Trinity, creates a `.fasta` and a `.bed` file,
 - `--examine_coding_effect` –  explores the effect the fusion events have on coding regions of the fused genes.
+
+## 3.4. Variant workflow
+
+This subworkflow integrates:
+1. Fusion detection using STAR-fusion (v1.10.1)
+2. Validation using FusionInspector
+3. And *de novo* fusion transcript reconstruction using Trinity (v2.14.0)
+
+
+
+
 
 ## 2.4. Create report
 
