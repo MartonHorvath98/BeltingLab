@@ -1,0 +1,210 @@
+# Bioinformatic Pipeline for RNA-seq data processing
+
+- [Bioinformatic Pipeline for RNA-seq data aprocessing](#bioinformatic-pipeline-for-rna-seq-data-processing)
+  - [1. Introduction](#1-introduction)
+  - [2. Nextflow Configuration](#2-nextflow-configuration)
+    - [2.1. Profiles](#21-profiles)
+    - [2.2. Processes](#22-processes)  
+    - [2.3. Parameters](#23-parameters)
+  - [3. Subworkflows](#3-subworkflows)
+    - [3.1. Core Workflow](#31-core-workflow)
+    - [3.2. Alignment Workflow](#32-alingnment-workflow)
+    - [3.3. Fusion Workflow](#33-fusion-workflow)
+    - [3.4. Variant Workflow](#34-variant-workflow)
+  - [4. Complete workflow](#4-complete-workflow)
+    - [4.1. Running the Pipeline](#41-running-the-pipeline)
+
+## 1. Introduction
+
+
+
+# 2. Nextflow Configuration
+
+## 2.1. Profiles
+
+## 2.2 Processes
+
+## 2.3 Parameters
+
+
+
+*Compare gene expression RNA-seq from cell lines (2D) and organoids (3D) grown under normoxia and hypoxia*
+
+## 2.1. Quality Control
+This step involves the pre-processing of the data to remove:
+
+- adapter sequences (adapter trimming)
+- low-quality reads
+- uncalled bases
+
+In this step, quality assessment is performed using the TrimGalore suite (v0.6.1), which is a wrapper script around the popular tools FastQC and the adapter trimming algorithm Cutadapt. Cutadapt is a semi-global aligner algorithm (also called free-shift), which means that the sequences are allowed to freely shift relative to each other and differences are only penalised in the overlapping region between them. The algorithm works using unit costs (alignment score) to find the optimal overlap alignments, where positive value is assigned to matching bases and penalties are given for mismatches, inserts or deletions.
+
+>[!IMPORTANT]
+> ***It is important to check that sequence quality is similar for all samples and discard outliers. As a general rule, read quality decreases towards the 3’ end of reads, and if it becomes too low, bases should be removed to improve mappability.  The quality and/or adapter trimming may result in very short sequences (sometimes as short as 0 bp), and since alignment programs may require sequences with a certain minimum length to avoid crashes to short fragments (in the case above, below 36 bases: --length 36) should not be considered either.***
+
+Following a prelimnary quality assessment with FastQC, we can say that the overall quality of the bases is high, over the required treshold, however there is a high precentage of adapter contamination. Every adapter match seems to fall under the Illumina adapters' list, so the flag `--illumina` will be included in the trimming! *E.g. FastQC over-represented sequences fails for VI-3429-593-2DH-1_R1_001.fastq :*
+| #Sequence                                          | Count | Percentage | Possible Source                          |
+|----------------------------------------------------|-------|------------|------------------------------------------|
+| GATCGGAAGAGCACACGTCTGAACTCCAGTCACGTCGGAGCATCTCGTAT | 119   | 1.19       | TruSeq Adapter, Index 18 (97% over 38bp) |
+| GATCGGAAGAGCACACGTCTGAACTCCAGTCACGTCGGAGCATCGCGTAT | 47    | 0.47       | TruSeq Adapter, Index 18 (97% over 38bp) |
+| GTCGGCATGTATTAGCTCTAGAATTACCACAGTTATCCAAGTAGGAGAGG | 16    | 0.16       | No Hit                                   |
+| CTTTTACTTCCTCTAGATAGTCAAGTTCGACCGTCTTCTCAGCGCTCCGC | 14    | 0.14       | No Hit                                   |
+| CCGACTTCCATGGCCACCGTCCTGCTGTCTATATCAACCAACACCTTTTC | 11    | 0.11       | No Hit                                   |
+
+```bash
+# Loop through the files in the input directory
+echo "Trimming adapters with Trim Galore on sample: ${sample}"
+fw_read=${RAW_DATA}Sample_${sample}/${sample}_R1_001.fastq.gz
+rv_read=${RAW_DATA}Sample_${sample}/${sample}_R2_001.fastq.gz
+    
+trim_galore ${fw_read} ${rv_read} -j 4 -q 20 --length 36 --paired --illumina --output_dir ${TRIM_DIR} --fastqc_args "--outdir ${TRIM_DIR}"
+```
+The arguments mean:
+- `-j/--cores [INT]` – defines the number of  of cores to be used for trimming *[default: 1]*,
+- `-q/--quality [INT]` – trims low-quality ends from reads below the threshold (as Phred score) in addition to adapter removal *[default: 20]*,
+- `--length [INT]` – discards reads that become shorter than length INT because of either quality or adapter trimming,
+- `--paired` – this option performs length trimming of quality/adapter/RRBS trimmed reads for paired-end files. To pass the validation test, both of a sequence pair are required to have a certain minimum length (defined by `--length`),
+- `--illumina` - selects the adapter class to match by cutadapt, in this case Illumina (*first 13bp of the Illumina universal adapter 'AGATCGGAAGAGC'*)
+- `--fastqc_args [ARGS]` – runs FastQC and passes down arguments in the form “arg1 arg2 etc.”, if we do not wish to pass extra arguments, FastQC in default mode can be invoked by `--fastqc` argument as well (***Either one should be called at a time!***).
+- `-o/--output_dir` – is used to specify where all output will be written.
+
+## 2.2. Prepare reference genome
+
+Once the pre-processing and quality control steps are completed the resulting, high-quality data is ready for the read mapping or alignment step. Depending on the availability of a reference genome sequence, it can happen in one of two ways: 
+1. When studying an organism with a reference genome, it is possible to infer which transcripts are expressed by mapping the reads to the reference genome (Genome mapping) or transcriptome (Transcriptome mapping). Mapping reads to the genome requires no knowledge of the set of transcribed regions or the way in which exons are spliced together. This approach allows the discovery of new, unannotated transcripts.
+2. When working on an organism without a reference genome, reads need to be assembled first into longer contigs (de novo assembly). These contigs can then be considered as the expressed transcriptome to which reads are re-mapped for quantification.
+
+>[!NOTE]
+>*In this case, we follow the aprroach remains genome mapping, followed by building a more accurate, splicing-sensitive transcriptome in a genome-guided manner, and then to increase the number of mapped reads by aligning them to the assembled transcriptome. However, these steps will only happen as part of the later workflow to identify gene fusions, and mutated genes.*
+
+>[!IMPORTANT]
+>***It is crucial to download the same reference in .fasta and .gff format from the same origin, to avoid conflicts in later steps of the analysis pipeline. Here, the GRCh38 release version v.108 (2022 Oct) of H. sapiens (human) from Ensembl is used as reference.***
+
+There are many bioinformatics tools available to perform the alignment of short reads. Here, the ones used are **Hisat2 (v.2.2.1)** (*“hierarchical indexing for spliced alignment of transcripts 2”*) and **STAR (v.2.7.11a)** (*Spliced Transcripts Alignment to a Reference*). Both Hisat2 and STAR provide sensitive and highliy efficient alignment for non-contiguous transcripts (splice-sensitive), which makes them ideal for aligning RNA-samples. In the later part of the analysis, results from the Hisat2 alignment will be used for differential expression analysis and STAR will be particularly useful for the detection of splice junctions and different isoforms.
+
+Indexes for the Hisat2 and STAR aligners are created using the `makeGrch38.sh` script. The hisat2-build command will create eight files with the extensions *.1.ht2, .2.ht2, .3.ht2, .4.ht2, .5.ht2, .6.ht2, .7.ht2* and *.8.ht2*. These files together are the index for hisat2. Because the plans include heavy focus on alternative splicing and gene fusion events, the genome index is created with transcript annotations using the `--ss` and `--exon` flags. These take into account the prepared exons and splice sites, in HISAT2's own format (three or four tab-separated columns). The STAR index of the reference genome compirses of the binary genome sequence, suffix arrays, junction coordinates, and transcript/gene information. The suffix array method used for the construction enables rapid and memory-efficient searches, **BUT!** the file system needs to have at least 100 Gb of disk space available for the human genome (*final size ~ 30Gb*). The genome indeces for Hisat2 and STAR are generated with the following steps:
+```bash
+# ------- Download reference from ENSEMBL -------
+# The Ensembl release version and base URLs for downloads
+ENSEMBL_RELEASE=103
+ENSEMBL_GENOME=ftp://ftp.ensembl.org/pub/release-${ENSEMBL_RELEASE}/fasta/homo_sapiens/dna
+ENSEMBL_GFF3_BASE=ftp://ftp.ensembl.org/pub/release-${ENSEMBL_RELEASE}/gff3/homo_sapiens/
+ENSEMBL_TRANSCRIPTOME=ftp://ftp.ensembl.org/pub/release-${ENSEMBL_RELEASE}/fasta/homo_sapiens/cds
+
+# ------- Create STAR index -------
+# Convert GFF file to GTF 
+gffread <path/…/ref.gff> -T -o <path/…/ref.gtf>
+# Building STAR index
+star --runThreadN ${threads} --runMode genomeGenerate --genomeDir <path/…/STAR_index/> --genomeFastaFiles <path/…/ref.fa>  --sjdbGTFfile <path/…/ref.gtf> --sjdbOverhang 100
+
+# ------- Create CTAT genome library -------
+prep_genome_lib.pl --genome_fa <path/…/ref.fa> --gtf <path/…/ref.gtf> --dfam_db 'human' --fusion_annot_lib <path/…/fusion_lib.dat.gz> --human_gencode_filter --pfam_db 'current'
+```
+
+## 2.3. Read mapping
+
+>[!NOTE]
+>*Besides the STAR mapper algorithm, Samtools is used for processing and analysing the data. It includes tools for file format conversion and manipulation, sorting, querying, and statistics amongst other methods.*
+
+We align the RNA-seq reads to a genome with STAR in order to identify abnormal splicing events and chimeras (fusion genes) with the help of the `sbatch_STAR.sh` script. Following the alignment we will use **STAR-fusion (v1.10.1)** to identify candidate fusion transcripts supported by the Illumina reads.
+
+```bash
+# Read the trimmed forward and reverse reads
+echo "Aligning reads with STAR on sample: ${sample}"
+    
+fw_read=${INPUT_DIR}${sample}_R1_001_val_1.fq.gz
+rv_read=${INPUT_DIR}${sample}_R2_001_val_2.fq.gz
+
+# Align reads with STAR
+STAR --runThreadN ${CORES}
+  --twopassMode Basic
+  --genomeDir ${REF} 
+    --readFilesIn ${fw_read} ${rv_read}
+    --readFilesCommand "gunzip -c"
+    --outSAMtype BAM SortedByCoordinate
+    --outBAMcompression 6
+    --outSAMstrandField intronMotif
+    --outSAMunmapped Within
+    --outFileNamePrefix "${OUTPUT_DIR}${sample}-"
+    --outReadsUnmapped None
+    --outFilterScoreMinOverLread 0
+    --outFilterMatchNminOverLread 0
+    --outFilterMatchNmin 0
+    --outFilterMismatchNmax 2
+    --alignSJstitchMismatchNmax 5 -1 5 5
+    --alignIntronMin 10
+    --alignIntronMax 100000
+    --alignMatesGapMax 100000
+    --chimOutType Junctions # **essential** to create the Chimeric.junction.out file for STAR-Fusion
+    --chimSegmentMin 12
+    --chimJunctionOverhangMin 8 # **essential to invoke chimeric read detection & reporting**
+    --chimOutJunctionFormat 1 # **essential** includes required metadata in Chimeric.out.junction file.
+```
+During the alignment step the applied parameters mean:
+- `--runThreadN [INT]` – number of cores,
+- `--genomeDir` – path to the reference STAR index,
+- `--readFilesIn [R1] [R2]` – mate 1s and mate 2s reads,
+- `--readFilesCommand ["gunzip -c"]` – STAR cannot work with compressed input files, so we have to create temporary unzipped versions of the trimmed fastq files
+- `--outSAMtype 'BAM SortedByCoordinate'` – makes sure that the output is in sorted BAM format,
+- `--outBAMcompression [INT]` – defines the compression rate of the output files (on a 0 to 10 scale, *default:6*),
+- `--outFileNamePrefix` – prefix to indetify unique outputs,
+- `--twopassMode Basic` – enambles the most sensitive novel splice junction discovery: during the 1st pass STAR maps with the usual parameters, then in hte 2nd pass it collects the previously detected junctions and uses the mas "annotated" junctions, what allows to detect more spliced reads mapping to novel junctions, 
+- `--chimOutType Junctions` – outputs the chimeric alignments to a separate file, called *"Chimeric.out.junction"*, that is the input file for STAR-Fusion,
+- `--chimOutJunctionFormat 1` – is essential to include required metadata in Chimeric.junction.out file for STAR-Fusion,
+- `--chimSegmentMin [INT]` – detect fusions that map to two chromosomes, with a minimum length above [INT] on either chromosome, this parameter is essential to start chimeric read detection and reporting
+
+## 2.4. Fusion detection
+
+In the next step of analysis we identify the chimeras that align to two chromosomes, each segment longer than the threshold set with `--chimSegmentMin`. STAR-Fusion is part of the suite of tools, [Trinity Cancer Transcriptome Analysis Toolkit (CTAT)](https://github.com/NCIP/Trinity_CTAT/wiki), focused on identifying and characterizing fusion transcripts in cancer. The Trinity CTAT ecosystem of tools requires a CTAT genome lib, which is effectively a resource package containing a target genome, reference annotations, and various meta data files that support fusion-finding. On BIANCA a pre-compiled CTAT genome lib is available that I am going to use. Predicted fusions are then 'in silico validated' using FusionInspector, which performs a more refined exploration of the candidate fusion transcripts, runs Trinity to de novo assemble fusion transcripts from the RNA-Seq reads, and provides the evidence in a suitable format to facilitate visualization. Predicted fusions are annotated according to prior knowledge of fusion transcripts relevant to cancer biology (or previously observed in normal samples and less likely to be relevant to cancer), and assessed for the impact of the predicted fusion event on coding regions, indicating whether the fusion is in-frame or frame-shifted along with combinations of domains that are expected to exist in the chimeric protein.
+
+```bash
+echo "Detecting gene fusions on sample: ${sample}"
+JUNCTIONS="${INPUT_DIR}${sample}-Chimeric.out.junction"
+        
+OUTPUT_DIR="${FUSION_DIR}${sample}/"
+mkdir -p "${OUTPUT_DIR}"
+STAR-Fusion \ 
+  --genome_lib_dir "${CTAT}" \ 
+  --chimeric_junctions "${junction_file}" \ 
+  --FusionInspector validate \ 
+  --denovo_reconstruct \ 
+  --examine_coding_effect \ 
+  --output-dir "${OUTPUT_DIR}" 
+```
+ Running parameters:
+- `--genome_lib_dir [PATH]` – path to the CTAT genome lib,
+- `-J/--chimeric_junctions [PATH]` – accession path to the 'Chimeric.out.junction' file created by STAR
+- `--FusionInspector 'validate'` – requires the candidates (in a format: geneA--geneB) from the first column of the 'Chimeric.out.junction' file, then aligns them to the genome to identify those reads that align concordantly as fusion evidence to the fusion contigs,
+- `--denovo_reconstruct` – *de novo* reconstruction of fusion transcripts using Trinity, creates a `.fasta` and a `.bed` file,
+- `--examine_coding_effect` –  explores the effect the fusion events have on coding regions of the fused genes.
+
+## 2.4. Create report
+
+> [!NOTE]
+> It is important to check the quality of the mapping process. Either with a reference or de novo assembly, the complete reconstruction of transcriptomes using short reads is challenging, they sometimes align equally well to multiple locations (multi-mapped reads or multi-reads). Paired-end reads reduce the problem of multi-mapping, because a pair of reads must map within a certain distance of each other and in a certain order. The percentage of mapped reads is a global indicator of the overall sequencing accuracy and of the presence of contaminating DNA.
+
+As a last step we produce statistics to gather the necessary information about the success of the alignment with **Picard tools (v.3.1.1)**, using the following commands:
+- `CollectAlignmentSummaryMetrics`- produces a summary of alignment metrics from the sorted BAM files, detailing the quality of the read alignments as well as the proportion of the reads that passed machine signal-to-noise threshold quality filters (*specific to Illumina data*),
+- `CollectInsertSizeMetrics` - collect metrics about the insert size distribution of a paired-end library, useful for validating library construction including the insert size distribution and read orientation of paired-end libraries (*the expected proportions of these metrics vary depending on the type of library preparation used, resulting from technical differences between pair-end libraries and mate-pair libraries*),
+- `CollectGcBiasMetrics` - collect metrics regarding GC bias: the relative proportions of guanine (G) and cytosine (C) nucleotides in a sample. Regions of high and low G + C content have been shown to interfere with mapping/aligning, ultimately leading to fragmented genome assemblies and poor coverage in a phenomenon known as 'GC bias'.
+
+```bash
+# Extract alignment metrics with Picard
+${PICARD_EXE} CollectAlignmentSummaryMetrics I="${sample}" O="${picard_output}/${name}/alignment_metrics.txt"
+
+# Extract insert size metrics with Picard
+${PICARD_EXE} CollectInsertSizeMetrics I="${sample}" O="${picard_output}/${name}/insert_size_metrics.txt" \
+H="${picard_output}/${name}/insert_size_histogram.pdf"
+
+# Extract GC bias metrics with Picard
+${PICARD_EXE} CollectGcBiasMetrics I=${sample} O="${picard_output}/${name}/gc_bias_metrics.txt" \
+CHART="${picard_output}/${name}/gc_bias_chart.pdf" S="${picard_output}/${name}/gc_summary.txt"
+```
+
+Last but not least, we parse summary statistics from results and log files generated by all other bioinformatics tools with **MultiQC (v.1.10.1)**. MultiQC recursively searches through any provided file paths and finds files that it recognises. It parses relevant information from these and generates a single stand-alone HTML report file. Furthermore, a multiqc_data folder will be generated as well with the reformatted compact data tables in there, one from each module in TSV format, as well as a verbose multiqc.log file and a multiqc_data.json. MultiQC's highly collaborative modules can work with the log files produced during the analysis:
+- **Cutadapt** – this module summarizes found and removed adapter sequences, primers, poly-A tails and other types of unwanted sequences, 
+- **FastQC** – the quality control module generates similar plots, which are included in the default HTML report as well. An additional fastqc_data.txt is generated too that can be helpful for downstream analysis as it is relatively easy to parse,
+- **STAR** - module parses summary statistics from the *Log.final.out* log files,
+- **featureCounts** – module parses results generated by featureCounts, visualizes the reads mapped to genes, exons, promoter, gene bodies, genomic bins, chromosomal locations or other features. The filenames must end in *'.summary'* to be discovered.
+
+Whilst MultiQC is typically used as a final reporting step in an analysis, it can also be used as an intermediate in your analysis, as these files essentially standardize the outputs from a lot of different tools and make them useful for downstream analysis. We will do that as well, going one step further with the TidyMultiqc package. The TidyMultiqc package provides the means to convert the multiqc_data.json file into a tidy data frame for downstream analysis in R. 

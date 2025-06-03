@@ -29,8 +29,8 @@ then
         while read -r sample
         do
         echo "Processing sample: $sample"
-	name=$(basename $sample)
-	name=$(sed 's/Sample_//g' <<< ${name})
+	    name=$(basename $sample)
+	    name=$(sed 's/Sample_//g' <<< ${name})
         fw_read=$(ls ${sample}/*_R1_001.fastq.gz)
         rv_read=$(ls ${sample}/*_R2_001.fastq.gz)
 

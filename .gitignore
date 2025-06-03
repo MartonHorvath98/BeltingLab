@@ -21,17 +21,19 @@
 *.knit.md
 
 # Dataset files
-data/
 rawdata/
+data/
 
 # Results
 results/
 plots/
-report/ 
-database/
+report/
 
 # Reference genome
 ctat-genome-lib/
+
+# Database
+InteractomeDB.sql
 
 # Report
 *.pptx
@@ -48,6 +50,7 @@ log-builder.sh
 *.dat
 *.log
 *.hmm*
+*.pzfx
 
 # nextflow files
 work/
