@@ -18,7 +18,7 @@
 > [!NOTE]
 > *This section provide a brief overview of the biological background relevant to the research project and explain the biological problem being addressed, its significance in the field, and a summary of the approach or hypothesis being tested.*
 
-Glioblastoma (GBM) is the most common and one of the most aggressive forms of primary malignant brain tumour. The current therapeutic strategy *i.e., surgical resection and radio-chemotherapy* does not significantly prolong patient survival ([Alexender BM & Cloughesy TF, 2017](https://doi.org/10.1200/JCO.2017.73.0119),[Louis DN et al., 2021](https://doi.org/10.1093/neuonc/noab106)). Despite extensive genomic and transcriptomic profiling ([Brennan CW et al., 2013](https://doi.org/10.1016/j.cell.2013.09.034), [Verhaak RGW et al., 2010](https://doi.org/10.1016/j.ccr.2009.12.020)), actionable surface antigens for targeted immunotherapies remain elusive due to GBM’s high heterogeneity, immunosuppressive microenvironment, and limitations set by the blood-brain barrier.
+Glioblastoma (GBM) is the most common and one of the most aggressive forms of primary malignant brain tumour. The current therapeutic strategy *i.e., surgical resection and radio-chemotherapy* does not significantly prolong patient survival ([Alexender BM & Cloughesy TF, 2017](https://doi.org/10.1200/JCO.2017.73.0119), [Louis DN et al., 2021](https://doi.org/10.1093/neuonc/noab106)). Despite extensive genomic and transcriptomic profiling ([Brennan CW et al., 2013](https://doi.org/10.1016/j.cell.2013.09.034), [Verhaak RGW et al., 2010](https://doi.org/10.1016/j.ccr.2009.12.020)), actionable surface antigens for targeted immunotherapies remain elusive due to GBM’s high heterogeneity, immunosuppressive microenvironment, and limitations set by the blood-brain barrier.
 
 Multiple first- and second-generation tyrosine kinase inhibitors (TKIs) have been tested targeting driver genes (*e.g. EGFR*). However, despite their well-established efficacy in other cancer types, trials have failed to demonstrate significant benefit in recurrent GBM. Early trials with monoclonal antibodies (mAbs) and immune checkpoint inhibitors (ICIs) have also been evaluated in GBM with limited success [(Obrador E et al., 2024)](https://doi.org/10.3390/ijms25052529). Promising, new treatment modalities in oncology, including anti-body-drug conjugates and CAR-T cells, all target the tumor cell surfaceome [(Lui Y et al., 2024)](https://doi.org/10.1038/s41423-024-01226-x). To systematically identify novel therapeutic vulnerabilities in GBM, our research group developed TS-MAP, a platform for unbiased mapping of the tumor surfaceome and endocytome [(Governa V et al., 2022)](https://doi.org/10.1073/pnas.2114456119).
 
@@ -44,7 +44,7 @@ First, we aimed to finalize and optimize a bioinformatics pipeline and to enhanc
 │   ├── etc
 │   └── scripts
 ├── meta
-├── CTAT-genome-lib
+├── ctat-genome-lib
 │   ├── ref_genome.star.idx
 │   └── ref_genome.salmon.idx
 ├── nextflow
@@ -113,7 +113,7 @@ fi
 >[!NOTE]
 > *Following the link at the end of this section a detailed description of the data processing nextflow pipeline is available...*
 
-The revised pipeline is organized into four coordinated sub-workflows: (i) isoform-level quantification, (ii) genome-guided alignment, (iii) variant calling, and (iv) fusion detection. The core execution path – comprising trim-galore, STAR alignment, Picard preprocessing, and variant calling using BCFtools – builds sequentially, while all other steps execute concurrently, taking full advantage of process-level parallelism (*Figure 2*). :paperclip: [More information...](nextflow/README.md#2-workflow)
+The revised pipeline is organized into four coordinated sub-workflows: (i) isoform-level quantification, (ii) genome-guided alignment, (iii) variant calling, and (iv) fusion detection. The core execution path – comprising trim-galore, STAR alignment, Picard preprocessing, and variant calling using BCFtools – builds sequentially, while all other steps execute concurrently, taking full advantage of process-level parallelism (*Figure 2*). :paperclip: [More information...](nextflow/README.md#3-subworkflows)
 
 ![Nextflow-pipeline](meta/figures/nextflow-pipeline.png "Schematic representation of the Nextflow pipeline: input files (sample metadata .csv and paired-end .fastq files) undergo trimming, quantification, alignment, fusion-detection and variant calling steps.")
 

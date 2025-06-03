@@ -1,7 +1,7 @@
 # Bioinformatic Pipeline for RNA-seq data processing
 
 - [Bioinformatic Pipeline for RNA-seq data aprocessing](#bioinformatic-pipeline-for-rna-seq-data-processing)
-  - [1. Introduction](#1-introduction)
+  - [1. Why nextflow?](#1-why-nextflow)
   - [2. Nextflow Configuration](#2-nextflow-configuration)
     - [2.1. Profiles](#21-profiles)
     - [2.2. Processes](#22-processes)  
@@ -14,92 +14,259 @@
   - [4. Complete workflow](#4-complete-workflow)
     - [4.1. Running the Pipeline](#41-running-the-pipeline)
 
-## 1. Introduction
+# 1. Why nextflow?
 
+For this project we used **Nextflow** *(v24.10.6)* [(Di Tomasso P et al., 2017)](https://doi.org/10.1038/nbt.3820) to ensure reproducibility and scalability. Nextflow is optimized for parallelization and distributed computing, that made it an optimal tool for us to tackle our *'lower than required'* throughput problem. For installation, environment setup and developement guidelines the official documentation of [Nextflow](https://www.nextflow.io/docs/latest/index.html) provided an invaluable resource.
 
+Shortly, Nextflow is a workflow language, that runs on the Java virtual machine (JVM), it has a syntax very similar to Groovy, allowing for making full use of the Java and Groovy standard libraries. Nextflow follows the Unix philosophy, in which many simple command line tools can be chained together into increasingly complex tasks. Nextflow pipeline script, can include different processes written in any scripting language (Bash, Perl, Ruby, Python, etc.), which was very beneficial for us, so that our previous scripts could have been integrated with minimal updates. In practice, these processes are then executed independently, and communicate only via asynchronous FIFO channels (=queues), from which we can define one or more as input and output.
+
+To set up an optimal development environment ofr creating, testing, and optimizing the Nextflow pipeline we used [VS Code](https://code.visualstudio.com/download), with the VS CODE [Nextflow extension](https://marketplace.visualstudio.com/items?itemName=nextflow.nextflow), to add language support and syntax highlights enhancing, diagnostics and debugging.
+
+> [!IMPORTANT]
+> ***Nextflow uses UTF-8 as the default character encoding for source files, we have to make sure to use UTF-8 encoding when editing Nextflow scripts with VS-code and keep it in mind as a possible debug option!***
 
 # 2. Nextflow Configuration
 
+The `nextflow.config` file is a central configuration file used by Nextflow to customize and control the behavior of workflows. It allows us to define parameters, execution settings, environment profiles, and resource requirements without hardcoding them into the pipeline scripts. When a pipeline script is launched, Nextflow looks for configuration files in multiple locations (by default), and apply them from lowest to highest priority (to avoid conflicting settings). In this project, however, we generally used the `-C <config-file>` command line option to specify a fixed configuration file `$NXF_HOME/nextflow.config` and ignore all other default file locations.
+
+```bash
+nextflow run complete-workflow.nf -C $NXF_HOME/nextflow.config
+```
+
 ## 2.1. Profiles
+
+Profiles in Nextflow are named sets of configuration settings that let us easily switch between different computing environments, resource configurations, or modes of running the pipeline.
+
+1. **'local' profile — for development and testing:**
+
+A local profile was defined for testing the pipeline on my personal computer: it uses the local executor - 'bash' on my virtual machine (WSL2) and minimal resources:
+
+```groovy
+local {
+    docker.enabled = true
+
+    process {
+        executor = 'local'
+    }
+}
+```
+
+2. **'uppmax' profile - for production data processing:**
+
+The uppmax profile is configured to run on the [BIANCA](https://www.uu.se/en/centre/uppmax/resources/clusters/bianca) HPC cluster, reserved for NAISS-SENS projects, i.e. sensitive data, on UPPMAX (Uppsala Multidisciplinary Center for Advanced Computational Science). UPPMAX is a shared resource, and it uses the [SLURM](https://docs.uppmax.uu.se/cluster_guides/slurm/) sceduling system to ensure fair allocation. SLURM can be accessed either by submitting and running a batch job script via the `sbatch` command or by starting an interactive session with `interactive -A [project-code]`. The sbatch script must include Slurm directives and the commands necessary to execute the job:
+- **mandatory settings**: 
+  - *account (-A)*: you must be a member to charge a project 
+- **important settings**:  
+  - *partition (-p)*: should the project run of complete nodes or only parts of them, on cores (default!) (1 node = 16 core(s)). The core hours scale with the number of course, which is important to keep in mind not to overshoot the 5000 core-hours allocated to a project each month.
+  - *number of cores/nodes (-n)*
+  - *time (-t)*: estimated runtime in core hours (hh:mm:ss). 
+
+> [!IMPORTANT]
+> ***Always overestimate with ~50%, because jobs get killed when they reach the time limit, but users only get charged for the actual runtime.*** 
+
+Furthermore, on the shared Linux computers of the UPPMAX clusters users cannot modify, upgrade or uninstall software themselves and instead an [Environment Module System](https://lmod.readthedocs.io/en/latest/) is used. Luckily Nextflow provied module system support, but it has to be set up in th econfig file as well:
+```groovy
+uppmax {
+        params.max_memory = 500.GB          //defaults for BIANCA
+        params.max_cpus = 16                //defaults for BIANCA
+        params.max_time = 240.h             //defaults for BIANCA
+	    params.project = 'sens1234123'      //Replace with actual project ID
+	    executor.account = 'sens1234123'    //Replace with actual project ID
+	    executor.queueSize = 60
+
+        process {
+            executor = 'slurm'
+            scratch = '$SNIC_TMP'
+        }
+}
+```
+Nextflow provides an abstraction between the pipeline's functional logic and the underlying execution system, thus the same process can get the next two example headers based on the profile selected on the command line from the configuration file:
+```bash
+nextflow run complete-workflow -C $NXF_HOME/nextflow.config -profile 'local'
+```
+The example header:
+```bash
+#!/bin/bash -l
+```
+BUT, if:
+```bash
+nextflow run complete-workflow -C $NXF_HOME/nextflow.config -profile 'uppmax'
+```
+The example header:
+```bash
+#!/bin/bash -l
+#SBATCH –A sens1234123 
+#SBATCH –J tag 
+#SBATCH –p core 
+#SBATCH –n 4 
+#SBATCH –t 06:00:00 
+```
 
 ## 2.2 Processes
 
+In Nextflow, a process is the fundamental unit of computation. Each process defines a self-contained task (*e.g. running a script*), and is executed independently according to the data dependencies defined by the workflow. Processes are portable, parallelizable, and reproducible, making them ideal for building scalable workflows across local machines, HPC clusters, and cloud platforms.
+
+A process consists of a name and a body. The process body define additional sections for directives, inputs, outputs, **script** (compulsory!), etc. 
+
+> [!NOTE]
+> A process must define a script block, all other sections are optional. Directives do not have an explicit section label, but must be defined first (see below). For example `modules/fastqc/main.nf`:
+
+```groovy
+process FASTQC {
+    tag "FastQC on $sample" //#SBATCH –J tag
+    label "low_effort" // #SBATCH –p core, –n 4, –t 06:00:00 
+
+    publishDir "${params.report_outdir}", mode: 'copy', overwrite: true
+
+    input:
+    tuple val(sample), path(read1), path(read2)
+    val subfolder // to avoid overwriting pre-trim with post-trim QC
+
+    output:
+    tuple val(sample), path("$subfolder/${sample}/*_fastqc.zip") , emit: fastqc_report
+    path "versions.yml"                                          , emit: version
+
+    script:
+    """
+    mkdir -p $subfolder/${sample}
+    fastqc \\
+        -o $subfolder/${sample} \\
+        ${params.fastqc_args} \\
+        --threads ${task.cpus} \\
+        ${read1} ${read2}
+
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+        fastqc: \$( fastqc --version | sed '/FastQC v/!d; s/.*v//' )
+    END_VERSIONS
+    """
+}
+```
+
+In the two profiles 'local' and 'uppmax' based on the directives, two different set of process selectors were set up to define executor specific properties for every process. The `withLabel` selectors allow the configuration of all processes annotated with a label directive, while the `withName` selector allows the configuration of a specific process in the pipeline by its name. In our pipeline, labels defined the time, memory and/or wall-clock time allocation for each process, while the name selectors ensured loading the suitable environments via [Docker](https://www.docker.com/products/docker-desktop/) (v28.0.4) containers ([BioContainers](https://biocontainers.pro/)) or Environment Modules:
+```groovy
+profiles {
+    // Local settings - executor: WSL2, bash
+    local {
+        process {
+            withLabel: low_effort {
+                cpus = 4
+                memory = 4.GB
+            }
+            withLabel: generic_task {
+                cpus = 4
+                memory = 12.GB
+            }
+            withLabel: thicc {
+                cpus = 4
+                memory = 22.GB
+            }
+            withName:FASTQC {
+                container = 'quay.io/biocontainers/fastqc:0.12.1--hdfd78af_0'
+            }
+            // Many more tools...
+        }
+    }
+    // UPPMAX settings - executor: slurm
+    uppmax {
+        process {
+            withLabel: low_effort {
+                cpus = 4
+                time = { 4.h * task.attempt } //Double time in case of server timeout
+                errorStrategy = { task.exitStatus == 140 ? 'retry' : 'terminate' } 
+                maxRetries = 2
+            }
+            withLabel: generic_task {
+                cpus = 8
+                // Same strategy for time, etc.
+            }
+            withLabel: thicc {
+                cpus = 16
+                // Same strategy for time, etc.
+            }
+            withName:FASTQC {
+                module = 'bioinfo-tools:FastQC/0.11.9'
+            }
+            // Many more tools...
+        }
+    }
+}
+```
+> [!IMPORTANT]
+> To access bioinformatics tools on UPPMAXX, the bioinfo-tools module must be loaded first!
+
 ## 2.3 Parameters
 
+We define pipeline paramteres in the config file using the `params` scope. Users can overwrite any parameter while running the workflow on the command line.
 
+> [!NOTE]
+> In this project, the parameters are predifined to use the CTAT-genome-lib reference and the files included in it by default. Any other reference must be specified on the command line. Tool runtime paramteres are also specified in advance.
 
-*Compare gene expression RNA-seq from cell lines (2D) and organoids (3D) grown under normoxia and hypoxia*
+> [!IMPORTANT]
+>  Parameters can be specified on the command line using double-dash (`--`). Single dash (`-`) parameters are used for nextflow interanlly. Otherwise, multiple parameters can also be redifined using a params file using the `-params-file` option.
 
-## 2.1. Quality Control
-This step involves the pre-processing of the data to remove:
+# 3. Subworkflows 
 
-- adapter sequences (adapter trimming)
-- low-quality reads
-- uncalled bases
+[:rewind:](../README.md#bioinformatical-pipeline) *Return to the main README file, if you used the link to the Nextflow configurations, before proceeding...*  
 
-In this step, quality assessment is performed using the TrimGalore suite (v0.6.1), which is a wrapper script around the popular tools FastQC and the adapter trimming algorithm Cutadapt. Cutadapt is a semi-global aligner algorithm (also called free-shift), which means that the sequences are allowed to freely shift relative to each other and differences are only penalised in the overlapping region between them. The algorithm works using unit costs (alignment score) to find the optimal overlap alignments, where positive value is assigned to matching bases and penalties are given for mismatches, inserts or deletions.
+## 3.1. Core Analysis
 
->[!IMPORTANT]
-> ***It is important to check that sequence quality is similar for all samples and discard outliers. As a general rule, read quality decreases towards the 3’ end of reads, and if it becomes too low, bases should be removed to improve mappability.  The quality and/or adapter trimming may result in very short sequences (sometimes as short as 0 bp), and since alignment programs may require sequences with a certain minimum length to avoid crashes to short fragments (in the case above, below 36 bases: --length 36) should not be considered either.***
+This subworkflow integrates (i) pre-trim QC using FastQC (v0.12.1), (ii) trimming using the TrimGalore suite (v0.6.10), (iii) post-trim QC with FastQC and SeqKit (v2.10), and (iv) isoform-level quantification using Salmon (v1.10.1) in mapping-based mode.
 
-Following a prelimnary quality assessment with FastQC, we can say that the overall quality of the bases is high, over the required treshold, however there is a high precentage of adapter contamination. Every adapter match seems to fall under the Illumina adapters' list, so the flag `--illumina` will be included in the trimming! *E.g. FastQC over-represented sequences fails for VI-3429-593-2DH-1_R1_001.fastq :*
+### Quality check (QC) - `modules/fastqc/main.nf`
+
+```groovy
+process FASTQC {
+    script:
+    """
+    mkdir -p $subfolder/${sample}
+    fastqc \\
+        -o $subfolder/${sample} \\
+        ${params.fastqc_args} \\
+        --threads ${task.cpus} \\
+        ${read1} ${read2}
+
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+        fastqc: \$( fastqc --version | sed '/FastQC v/!d; s/.*v//' )
+    END_VERSIONS
+    """
+}
+```
+Transcribed to:
+```bash
+# e.g. pre-trim on VI-3429-593-2DH-1
+mkdir -p pre-trim/VI-3429-593-2DH-1
+
+trim_galore \
+    -O pre-trim/VI-3429-593-2DH-1 \
+    -q 20 --length 36 --paired --illumina \
+    VI-3429-593-2DH-1_R1_001.fastq.gz VI-3429-593-2DH-1_R2_001.fastq.gz
+```
+*e.g.: FastQC over-represented sequences fails VI-3429-593-2DH-1_R1_001.fastq.gz:*
 | #Sequence                                          | Count | Percentage | Possible Source                          |
 |----------------------------------------------------|-------|------------|------------------------------------------|
-| GATCGGAAGAGCACACGTCTGAACTCCAGTCACGTCGGAGCATCTCGTAT | 119   | 1.19       | TruSeq Adapter, Index 18 (97% over 38bp) |
-| GATCGGAAGAGCACACGTCTGAACTCCAGTCACGTCGGAGCATCGCGTAT | 47    | 0.47       | TruSeq Adapter, Index 18 (97% over 38bp) |
-| GTCGGCATGTATTAGCTCTAGAATTACCACAGTTATCCAAGTAGGAGAGG | 16    | 0.16       | No Hit                                   |
-| CTTTTACTTCCTCTAGATAGTCAAGTTCGACCGTCTTCTCAGCGCTCCGC | 14    | 0.14       | No Hit                                   |
-| CCGACTTCCATGGCCACCGTCCTGCTGTCTATATCAACCAACACCTTTTC | 11    | 0.11       | No Hit                                   |
+| GATCGGAAGAGCACACGTCTGAACTCCAGTCACGTCGGAGCATCTCGTAT | 1058610   | 1.07       | TruSeq Adapter, Index 18 (97% over 38bp) |
+| GATCGGAAGAGCACACGTCTGAACTCCAGTCACGTCGGAGCATCGCGTAT | 389043    | 0.39       | TruSeq Adapter, Index 18 (97% over 38bp) |
+| GTCGGCATGTATTAGCTCTAGAATTACCACAGTTATCCAAGTAGGAGAGG | 165859    | 0.17       | No Hit                                  |
 
-```bash
-# Loop through the files in the input directory
-echo "Trimming adapters with Trim Galore on sample: ${sample}"
-fw_read=${RAW_DATA}Sample_${sample}/${sample}_R1_001.fastq.gz
-rv_read=${RAW_DATA}Sample_${sample}/${sample}_R2_001.fastq.gz
-    
-trim_galore ${fw_read} ${rv_read} -j 4 -q 20 --length 36 --paired --illumina --output_dir ${TRIM_DIR} --fastqc_args "--outdir ${TRIM_DIR}"
-```
-The arguments mean:
-- `-j/--cores [INT]` – defines the number of  of cores to be used for trimming *[default: 1]*,
-- `-q/--quality [INT]` – trims low-quality ends from reads below the threshold (as Phred score) in addition to adapter removal *[default: 20]*,
-- `--length [INT]` – discards reads that become shorter than length INT because of either quality or adapter trimming,
-- `--paired` – this option performs length trimming of quality/adapter/RRBS trimmed reads for paired-end files. To pass the validation test, both of a sequence pair are required to have a certain minimum length (defined by `--length`),
-- `--illumina` - selects the adapter class to match by cutadapt, in this case Illumina (*first 13bp of the Illumina universal adapter 'AGATCGGAAGAGC'*)
-- `--fastqc_args [ARGS]` – runs FastQC and passes down arguments in the form “arg1 arg2 etc.”, if we do not wish to pass extra arguments, FastQC in default mode can be invoked by `--fastqc` argument as well (***Either one should be called at a time!***).
-- `-o/--output_dir` – is used to specify where all output will be written.
+Following a prelimnary quality assessment with FastQC, we can say that the overall quality of the bases is high, over the required treshold, however there is a high precentage of adapter contamination. Every adapter match seems to fall under the Illumina adapters' list, so the flag `--illumina` will be included in the trimming! 
 
-## 2.2. Prepare reference genome
+### Trimming - modules/trim_gelore/main.nf
 
-Once the pre-processing and quality control steps are completed the resulting, high-quality data is ready for the read mapping or alignment step. Depending on the availability of a reference genome sequence, it can happen in one of two ways: 
-1. When studying an organism with a reference genome, it is possible to infer which transcripts are expressed by mapping the reads to the reference genome (Genome mapping) or transcriptome (Transcriptome mapping). Mapping reads to the genome requires no knowledge of the set of transcribed regions or the way in which exons are spliced together. This approach allows the discovery of new, unannotated transcripts.
-2. When working on an organism without a reference genome, reads need to be assembled first into longer contigs (de novo assembly). These contigs can then be considered as the expressed transcriptome to which reads are re-mapped for quantification.
 
->[!NOTE]
->*In this case, we follow the aprroach remains genome mapping, followed by building a more accurate, splicing-sensitive transcriptome in a genome-guided manner, and then to increase the number of mapped reads by aligning them to the assembled transcriptome. However, these steps will only happen as part of the later workflow to identify gene fusions, and mutated genes.*
+Quality assessment is performed using the TrimGalore suite (v0.6.1), which is a wrapper script around Cutadapt, a semi-global aligner algorithm (also called free-shift). It means that the sequences are allowed to freely shift relative to each other and differences are only penalised in the overlapping region between them. The algorithm works using unit costs (alignment score) to find the optimal overlap alignments, where positive value is assigned to matching bases and penalties are given for mismatches, inserts or deletions.
 
 >[!IMPORTANT]
->***It is crucial to download the same reference in .fasta and .gff format from the same origin, to avoid conflicts in later steps of the analysis pipeline. Here, the GRCh38 release version v.108 (2022 Oct) of H. sapiens (human) from Ensembl is used as reference.***
+> ***It is important to check that sequence quality is similar for all samples and discard outliers. As a general rule, read quality decreases towards the 3’ end of reads, and if it becomes too low, bases should be removed to improve mappability. The quality and/or adapter trimming may result in very short sequences (sometimes as short as 0 bp), and since alignment programs may require sequences with a certain minimum length to avoid crashes to short fragments (in the case above, below 36 bases: --length 36) should not be considered either.***
 
-There are many bioinformatics tools available to perform the alignment of short reads. Here, the ones used are **Hisat2 (v.2.2.1)** (*“hierarchical indexing for spliced alignment of transcripts 2”*) and **STAR (v.2.7.11a)** (*Spliced Transcripts Alignment to a Reference*). Both Hisat2 and STAR provide sensitive and highliy efficient alignment for non-contiguous transcripts (splice-sensitive), which makes them ideal for aligning RNA-samples. In the later part of the analysis, results from the Hisat2 alignment will be used for differential expression analysis and STAR will be particularly useful for the detection of splice junctions and different isoforms.
 
-Indexes for the Hisat2 and STAR aligners are created using the `makeGrch38.sh` script. The hisat2-build command will create eight files with the extensions *.1.ht2, .2.ht2, .3.ht2, .4.ht2, .5.ht2, .6.ht2, .7.ht2* and *.8.ht2*. These files together are the index for hisat2. Because the plans include heavy focus on alternative splicing and gene fusion events, the genome index is created with transcript annotations using the `--ss` and `--exon` flags. These take into account the prepared exons and splice sites, in HISAT2's own format (three or four tab-separated columns). The STAR index of the reference genome compirses of the binary genome sequence, suffix arrays, junction coordinates, and transcript/gene information. The suffix array method used for the construction enables rapid and memory-efficient searches, **BUT!** the file system needs to have at least 100 Gb of disk space available for the human genome (*final size ~ 30Gb*). The genome indeces for Hisat2 and STAR are generated with the following steps:
-```bash
-# ------- Download reference from ENSEMBL -------
-# The Ensembl release version and base URLs for downloads
-ENSEMBL_RELEASE=103
-ENSEMBL_GENOME=ftp://ftp.ensembl.org/pub/release-${ENSEMBL_RELEASE}/fasta/homo_sapiens/dna
-ENSEMBL_GFF3_BASE=ftp://ftp.ensembl.org/pub/release-${ENSEMBL_RELEASE}/gff3/homo_sapiens/
-ENSEMBL_TRANSCRIPTOME=ftp://ftp.ensembl.org/pub/release-${ENSEMBL_RELEASE}/fasta/homo_sapiens/cds
+### Isoform-level quantification
 
-# ------- Create STAR index -------
-# Convert GFF file to GTF 
-gffread <path/…/ref.gff> -T -o <path/…/ref.gtf>
-# Building STAR index
-star --runThreadN ${threads} --runMode genomeGenerate --genomeDir <path/…/STAR_index/> --genomeFastaFiles <path/…/ref.fa>  --sjdbGTFfile <path/…/ref.gtf> --sjdbOverhang 100
+For read quantification we used the Salmon (v1.10.1), a fast and lightweight method for quantifying transcript abundance from RNA–seq reads. 
+Prepare reference genome
 
-# ------- Create CTAT genome library -------
-prep_genome_lib.pl --genome_fa <path/…/ref.fa> --gtf <path/…/ref.gtf> --dfam_db 'human' --fusion_annot_lib <path/…/fusion_lib.dat.gz> --human_gencode_filter --pfam_db 'current'
-```
+
 
 ## 2.3. Read mapping
 
@@ -208,3 +375,6 @@ Last but not least, we parse summary statistics from results and log files gener
 - **featureCounts** – module parses results generated by featureCounts, visualizes the reads mapped to genes, exons, promoter, gene bodies, genomic bins, chromosomal locations or other features. The filenames must end in *'.summary'* to be discovered.
 
 Whilst MultiQC is typically used as a final reporting step in an analysis, it can also be used as an intermediate in your analysis, as these files essentially standardize the outputs from a lot of different tools and make them useful for downstream analysis. We will do that as well, going one step further with the TidyMultiqc package. The TidyMultiqc package provides the means to convert the multiqc_data.json file into a tidy data frame for downstream analysis in R. 
+
+[!IMPORTANT]
+>***When logging in, all users join the login node first. It is IMPORTANT, although not compulsory on BIANCA, to move onto a computing node (using either an interactive session or an sbatch script) to perform calculations. However, memory intensive processes will be down prioritized to not block access for others (and might never be finished).***
