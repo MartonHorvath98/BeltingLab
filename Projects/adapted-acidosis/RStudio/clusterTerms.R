@@ -68,6 +68,37 @@ dir.create(file.path("Results","U87",date,"tables"), recursive = T, showWarnings
 write.xlsx(U87.cluster$sel_pH64$df, file.path("Results","U87",date,"tables","U87_sel_pH64_GSEA_clusters.xlsx"))
 write.xlsx(U87.cluster$acu_pH64$df, file.path("Results","U87",date,"tables","U87_acu_pH64_GSEA_clusters.xlsx"))
 
+# -----------        U87 Normoxia vs Hypoxia                       ----------- #
+# combine GO and pathway enrichment results
+U87.combinedOX <- rbind(
+  dplyr::filter(U87.GSEA$`hypoxia-control_nox`$sig_df, p.adjust < 0.001),
+    dplyr::filter(U87.GO$`hypoxia-control_nox`$sig_df, p.adjust < 0.001))
+
+U87.combinedOX <- U87.combinedOX %>%
+  dplyr::rowwise(.) %>% 
+  # Calculate background ratio
+  dplyr::mutate(
+    geneRatio = length(unlist(strsplit(core_enrichment,"\\/")))/setSize
+    ) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::relocate(c("ID", "Name", "setSize", "geneRatio", "NES", "p.adjust", "core_enrichment"),
+                    .before = everything())
+
+# Get the clusters
+U87.OX.cluster <- get_cluster(U87.combinedOX, similarity.matrix, .threshold = 0.25)
+
+# Get representative terms
+U87.OX.cluster$df <- get_cluster_representative(
+  .cluster = U87.OX.cluster$df,
+  .degs = U87.deg$`hypoxia-control_nox` %>%  dplyr::rename( "log2FoldChange" = logFC,
+                                                            "padj" = adj.P.Val))
+V(U87.OX.cluster$graph)$Representative <- U87.OX.cluster$df$Representative
+V(U87.OX.cluster$graph)$Description <- U87.OX.cluster$df$Name
+
+# Save results
+dir.create(file.path("Results","U87",date,"tables"), recursive = T, showWarnings = FALSE)
+write.xlsx(U87.OX.cluster$df, file.path("Results","U87",date,"tables","U87_hypoxia_GSEA_clusters.xlsx"))
+
 # -----------         PANC1 Chronic Acidosis AA vs NA              ----------- #
 
 # Combine GO and pathway enrichment results
@@ -131,6 +162,22 @@ ggsave(file.path("Results", "U87", date, "U87_sel_pH64_GSEA_network_NES.png"),
        width = 20, height = 14, units = "in")
 ggsave(file.path("Results", "U87", date, "U87_sel_pH64_GSEA_network_NES.svg"),
        plot = U87.cluster$sel_pH64$plot, bg = "white", device = "svg",
+       width = 20, height = 14, units = "in")
+
+# U87 - Hypoxia
+U87.OX.cluster$sub_graph <- filter_graph(U87.OX.cluster$graph, 5)
+set.seed(42)
+U87.OX.cluster$layout <- layout_with_fr(U87.OX.cluster$sub_graph)
+
+(U87.OX.cluster$plot <- plot_network(.net = U87.OX.cluster$sub_graph,
+                                           .layout = U87.OX.cluster$layout,
+                                           .df = U87.OX.cluster$df))
+# Save plot
+ggsave(file.path("Results", "U87", date, "U87_hypoxia_GSEA_network_NES.png"),
+       plot = U87.OX.cluster$plot, bg = "white",
+       width = 20, height = 14, units = "in")
+ggsave(file.path("Results", "U87", date, "U87_hypoxia_GSEA_network_NES.svg"),
+       plot = U87.OX.cluster$plot, bg = "white", device = "svg",
        width = 20, height = 14, units = "in")
 
 

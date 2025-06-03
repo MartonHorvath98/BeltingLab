@@ -392,8 +392,8 @@ sapply(names(U87.GSEA), function(x){
 })
 
 
-interest_genes <- c("CSGALNACT1","CSGALNACT2","CHSY1","CHSY3","CHPF","CHPF2",
-                    "DCN","BGN","DSE","DSEL","CA9","HIF1A","G0S2","C7orf68")
+interest_genes_U87 <- c("CSGALNACT1","CSGALNACT2","CHSY1","CHSY3","CHPF","CHPF2",
+                        "DCN","BGN","DSE","DSEL","CA9","HIF1A","G0S2","C7orf68")
 
 U87.subset <- list()
 
@@ -507,32 +507,75 @@ openxlsx::write.xlsx(PANC1.GSEA[c(2:3)],
                      file.path(wd, results_dir, date, "tables", "PANC1_all_pathway_GSEA.xlsx"))
 
 
-# R-HSA-1474244 - EXTRACELLULAR_MATRIX_ORGANIZATION
-# R-HSA-1630316 - GLYCOSAMINOGLYCAN_METABOLISM
-# GO:0006029 - PROTEOGLYCAN_METABOLIC_PROCESS
-# R-HSA-1793185 - CHONDROITIN_SULFATE_DERMATAN_SULFATE_METABOLISM
-# GO:0045444 - FAT_CELL_DIFFERENTIATION
-interest_genes <- rbind(terms, pathways) %>% 
-  dplyr::filter(gs_exact_source %in% c("R-HSA-1474244","R-HSA-1630316",
-                                       "GO:0006029", "R-HSA-1793185",
-                                       "GO:0045444")) %>% 
-  dplyr::select(gene_symbol, gs_name)
+interest_genes_PANC1 <- c("CSGALNACT1","CSGALNACT2","CHSY1","DCN","BGN","DSE","DSEL")
 
-interest_genes <- interest_genes %>% 
-  dplyr::mutate(gs_name = gsub("REACTOME_|GOBP_|KEGG_|HALLMARK_", "", gs_name)) %>%
-  dplyr::group_by(gene_symbol) %>%
-  dplyr::summarise(gs_name = paste(gs_name, collapse = "; "))
+PANC1.subset <- list()
 
-tmp <- merge.rec(list(CCLD.df[,c(1,2,4)] %>% dplyr::filter(Symbol %in% interest_genes$gene_symbol),
-               HGCC.deg$U3017[,c(2,4,8,10)] %>% dplyr::filter(Symbol %in% interest_genes$gene_symbol),
-               HGCC.deg$U3047[,c(2,4,8,10)] %>% dplyr::filter(Symbol %in% interest_genes$gene_symbol),
-               HGCC.deg$U3054[,c(2,4,8,10)] %>% dplyr::filter(Symbol %in% interest_genes$gene_symbol)),
-               #U87.deg$`sel_pH647-control_sel`[,c(2,10)] %>% dplyr::filter(Symbol %in% interest_genes$Gene.name),
-               #PANC1.deg[,c(2,10)] %>% dplyr::filter(Symbol %in% interest_genes$Gene.name)),
-          by = "Symbol", all = T, suffixes = c("",""))
-tmp <- setNames(tmp, c("Symbol","log2FC.CCLD","regulation.CCLD",
-                       "log2FC.U3017","padj.U3017","regulation.U3017",
-                       "log2FC.U3047","padj.U3047","regulation.U3047",
-                       "log2FC.U3054","padj.U3054","regulation.U3054"))
-interest_genes <- merge(interest_genes, tmp, by.x = "gene_symbol", by.y = "Symbol")                 
-write.xlsx(interest_genes, "Results/selected-5-category-genes.xlsx")
+PANC1.subset$logexp <- PANC1.expr %>%
+  dplyr::select(!c(ENTREZID, GENENAME)) %>% 
+  dplyr::filter(SYMBOL %in% interest_genes_PANC1 & 
+                  PROBEID %in% PANC1.deg$PROBEID) 
+                
+
+PANC1.subset$exp <- PANC1.subset$logexp %>% 
+  dplyr::mutate(across("1_NA1_(Clariom_D_Human).CEL":"6_AA3_(Clariom_D_Human).CEL", ~ 2^.))
+
+PANC1.subset$df <- dplyr::inner_join(
+  PANC1.subset$exp %>% 
+    tidyr::pivot_longer(cols = !c(SYMBOL,PROBEID), values_to = "expression",
+                        names_to = "sample"),
+  PANC1.subset$logexp %>% 
+    tidyr::pivot_longer(cols = !c(SYMBOL,PROBEID), values_to = "logexp",
+                        names_to = "sample"),
+  by = c("PROBEID","SYMBOL","sample")) %>% 
+  dplyr::rowwise(.) %>% 
+  dplyr::mutate(treatment = case_match(sample,
+                                       c("1_NA1_(Clariom_D_Human).CEL",
+                                         "2_NA2_(Clariom_D_Human).CEL",
+                                         "3_NA3_(Clariom_D_Human).CEL") ~ "PANC1_NA",
+                                       c("4_AA1_(Clariom_D_Human).CEL",
+                                         "5_AA2_(Clariom_D_Human).CEL",
+                                         "6_AA3_(Clariom_D_Human).CEL") ~ "PANC1_AA"
+  )) %>%
+  dplyr::group_by(SYMBOL, treatment) %>% 
+  dplyr::reframe(sample = sample, 
+                 expression = expression,
+                 mean = mean(expression),
+                 se = sd(expression)/sqrt(n()),
+                 logexp = logexp)
+
+
+tmp <- limmaDEA(.data = PANC1.subset$logexp,
+                .design = c("PANC1_NA", "PANC1_NA","PANC1_NA",
+                            "PANC1_AA", "PANC1_AA", "PANC1_AA"),
+                .contrast = c("PANC1_AA - PANC1_NA"))
+
+tmp[[1]] %>% 
+  dplyr::mutate(
+    SYMBOL = ID.Symbol) %>% 
+  dplyr::select(SYMBOL, logFC) %>% 
+  rbind.fill(.) %>% 
+  dplyr::full_join(PANC1.subset$df, ., by = c("SYMBOL")) %>% 
+  dplyr::mutate(logFC = ifelse(is.na(logFC), 0, logFC)) -> PANC1.subset$df
+
+
+
+dir.create(file.path(wd, "Results", "PANC1", date, "tables"), recursive = T, showWarnings = FALSE)
+openxlsx::write.xlsx(PANC1.subset, 
+                     file.path(wd, "Results", "PANC1", date, "tables",
+                               "PANC1_linear_scale_genes-of-interest_expression.xlsx"))
+
+# 
+# tmp <- merge.rec(list(CCLD.df[,c(1,2,4)] %>% dplyr::filter(Symbol %in% interest_genes$gene_symbol),
+#                HGCC.deg$U3017[,c(2,4,8,10)] %>% dplyr::filter(Symbol %in% interest_genes$gene_symbol),
+#                HGCC.deg$U3047[,c(2,4,8,10)] %>% dplyr::filter(Symbol %in% interest_genes$gene_symbol),
+#                HGCC.deg$U3054[,c(2,4,8,10)] %>% dplyr::filter(Symbol %in% interest_genes$gene_symbol)),
+#                #U87.deg$`sel_pH647-control_sel`[,c(2,10)] %>% dplyr::filter(Symbol %in% interest_genes$Gene.name),
+#                #PANC1.deg[,c(2,10)] %>% dplyr::filter(Symbol %in% interest_genes$Gene.name)),
+#           by = "Symbol", all = T, suffixes = c("",""))
+# tmp <- setNames(tmp, c("Symbol","log2FC.CCLD","regulation.CCLD",
+#                        "log2FC.U3017","padj.U3017","regulation.U3017",
+#                        "log2FC.U3047","padj.U3047","regulation.U3047",
+#                        "log2FC.U3054","padj.U3054","regulation.U3054"))
+# interest_genes <- merge(interest_genes, tmp, by.x = "gene_symbol", by.y = "Symbol")                 
+# write.xlsx(interest_genes, "Results/selected-5-category-genes.xlsx")

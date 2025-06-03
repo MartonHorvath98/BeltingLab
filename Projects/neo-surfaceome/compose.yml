@@ -1,0 +1,38 @@
+version: "3.8"
+# Docker Compose file for setting up a MySQL database and a Shiny app
+services:
+  db:
+    image: mysql:8.0
+    container_name: neo-db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: 4Pt52R3mT5*g_49
+      MYSQL_DATABASE: InteractomeDB
+    volumes:
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./database/data:/docker-entrypoint-initdb.d/data
+    command: --local-infile=1
+    ports:
+      - "3307:3306"
+    networks:
+      - neo-net
+
+  shiny:
+    build:
+      context: ./shiny-app
+    container_name: neo-shiny
+    ports:
+      - "8180:8180"
+    depends_on:
+      - db
+    environment:
+      DB_HOST: db
+      DB_USER: root
+      DB_PASSWORD: 4Pt52R3mT5*g_49
+      DB_NAME: InteractomeDB
+      DB_PORT: 3306
+    networks:
+      - neo-net
+
+networks:
+  neo-net:
