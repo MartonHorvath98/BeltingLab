@@ -672,7 +672,7 @@ JOIN domain_info di ON da.domain_id = di.domain_id
 WHERE gi.gene_id = GeneId;
 END$$
 DELIMITER ;
--- e.g., "EGFR" --> EXEC MapDomains("ENSG00000146648");
+-- e.g., "EGFR" --> CALL MapDomains("ENSG00000146648");
 
 -- Query 2) identifying interaction partners potentially disrupted by a mutation at a specific residue
 DELIMITER $$
@@ -690,7 +690,7 @@ WHERE pdm.gene_id = GeneId
 	AND SnvLoc BETWEEN pdm.domain_start AND pdm.domain_end;
 END$$
 DELIMITER ;
--- e.g., ("EGFR", 100) --> EXEC PeturbedDomains("ENSG00000146648", 100);
+-- e.g., ("EGFR", 100) --> CALL PeturbedDomains("ENSG00000146648", 100);
 ```
 
 :rewind: *[Return](../README.md#nsfw-neo-surfaceome-feature-workbench) to the main README file...* 
