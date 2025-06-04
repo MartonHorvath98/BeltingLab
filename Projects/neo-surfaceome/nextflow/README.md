@@ -473,7 +473,7 @@ java -jar $PICARD CollectRnaSeqMetrics \
     --STRAND SECOND_READ_TRANSCRIPTION_STRAND \
     --ASSUME_SORTED true
 ```
->[!IMPORTANT]
+> [!IMPORTANT]
 > On its input, this tools requires valid SAM/BAM file(s), a tab-delimited file REF_FLAT file containing information about the location of other transcripts, exon start and stop sites, etc., and (optinally) a file including the location of rRNA sequences in the genome, in interval_list format. 
 
 This last two files are not available by default in the CTAT-genome-lib, so we created them, using custom scripts:
@@ -517,6 +517,7 @@ Following the alignment we used [STAR-fusion](https://github.com/STAR-Fusion/STA
 > Since we experienced trouble with running STAR-fusion in 'kickstart mode' according to the provider's instructions, I used bith the junction file and the raw read inputs, which solved this issue.
 
 Predicted fusions were then 'in silico validated' using [FusionInspector](https://github.com/FusionInspector/FusionInspector/wiki/installing-FusionInspector), which performs a more refined exploration of the candidate fusion transcripts, runs [Trinity](https://github.com/trinityrnaseq/trinityrnaseq/wiki) to *de novo* assemble fusion transcripts from the RNA-Seq reads, and provides the evidence in a suitable format to facilitate visualization. Predicted fusions are annotated according to prior knowledge of fusion transcripts relevant to cancer biology (or previously observed in normal samples and less likely to be relevant to cancer), and assessed for the impact of the predicted fusion event on coding regions, indicating whether the fusion is in-frame or frame-shifted along with combinations of domains that are expected to exist in the chimeric protein.
+
 ```groovy
 process FUSION {
     // Directives
@@ -561,44 +562,229 @@ Running parameters:
 ## 3.4. Variant workflow
 
 This subworkflow integrates:
-1. Fusion detection using STAR-fusion (v1.10.1)
-2. Validation using FusionInspector
-3. And *de novo* fusion transcript reconstruction using Trinity (v2.14.0)
+1. Marking PCR duplicated with Picard tools (v3.1.1) using `MarkDuplicates`
+2. Subsampling (25%, 50%, 75%) reads at random with Picard tools using `DownsampleSam`
+3. Somatic variant calling with BCFtools (v1.20) using `mpileup` and `call`
+4. Annotating variants using VEP (v113.0)
 
-
-
-
-
-## 2.4. Create report
+While [GATK](https://gatk.broadinstitute.org/hc/en-us) suite is perhaps the most popular variant caller, in my experience it is most sensitive for detecting germline single nucleotide variants (SNVs), and doesn't work as well for RNA-seq. Plus, it requires multiple extra steps of pre-processing. Hence, we worked with the 'old faithful' pipeline, based on [BCFtools](https://samtools.github.io/bcftools/howtos/variant-calling.html), which we found has greater sensitivity for SNVs when compared to GATK. 
 
 > [!NOTE]
-> It is important to check the quality of the mapping process. Either with a reference or de novo assembly, the complete reconstruction of transcriptomes using short reads is challenging, they sometimes align equally well to multiple locations (multi-mapped reads or multi-reads). Paired-end reads reduce the problem of multi-mapping, because a pair of reads must map within a certain distance of each other and in a certain order. The percentage of mapped reads is a global indicator of the overall sequencing accuracy and of the presence of contaminating DNA.
+> Although, false positive rate can be higher too, and mpileup is neither fine-tuned to identify indels, these limitations we chose to compensate with cross-referencing RNA-seq and WGS results.
 
-As a last step we produce statistics to gather the necessary information about the success of the alignment with **Picard tools (v.3.1.1)**, using the following commands:
-- `CollectAlignmentSummaryMetrics`- produces a summary of alignment metrics from the sorted BAM files, detailing the quality of the read alignments as well as the proportion of the reads that passed machine signal-to-noise threshold quality filters (*specific to Illumina data*),
-- `CollectInsertSizeMetrics` - collect metrics about the insert size distribution of a paired-end library, useful for validating library construction including the insert size distribution and read orientation of paired-end libraries (*the expected proportions of these metrics vary depending on the type of library preparation used, resulting from technical differences between pair-end libraries and mate-pair libraries*),
-- `CollectGcBiasMetrics` - collect metrics regarding GC bias: the relative proportions of guanine (G) and cytosine (C) nucleotides in a sample. Regions of high and low G + C content have been shown to interfere with mapping/aligning, ultimately leading to fragmented genome assemblies and poor coverage in a phenomenon known as 'GC bias'.
-
-```bash
-# Extract alignment metrics with Picard
-${PICARD_EXE} CollectAlignmentSummaryMetrics I="${sample}" O="${picard_output}/${name}/alignment_metrics.txt"
-
-# Extract insert size metrics with Picard
-${PICARD_EXE} CollectInsertSizeMetrics I="${sample}" O="${picard_output}/${name}/insert_size_metrics.txt" \
-H="${picard_output}/${name}/insert_size_histogram.pdf"
-
-# Extract GC bias metrics with Picard
-${PICARD_EXE} CollectGcBiasMetrics I=${sample} O="${picard_output}/${name}/gc_bias_metrics.txt" \
-CHART="${picard_output}/${name}/gc_bias_chart.pdf" S="${picard_output}/${name}/gc_summary.txt"
+#### Remove low MAPQ reads, and mark and remove PCR and/or optical duplicates - `modules/picard/dedup/main.nf`
+```groovy
+process PICARD_DEDUP {
+    // Directives
+    // input:
+    // output:
+    script:
+    """
+    # Collect RNA-seq metrics
+    java -jar \$PICARD MarkDuplicates \\
+		--INPUT ${bam_file} \\
+		--OUTPUT ${sample}-dedup.bam \\
+		--METRICS_FILE ${sample}-dup-metrics.txt \\
+		--ASSUME_SORT_ORDER coordinate
+    
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+	picard: \$(echo \$(java -jar \$PICARD MarkDuplicates 2>&1) | grep -oP "(?<=Version:).+?(?=\\ )")
+    END_VERSIONS
+    """
+}
 ```
+#### Produce 3 random BAM subsets per sample (at 25%, 50%, and 75%) - `modules/picard/downsample/main.nf`
+```groovy
+process PICARD_DOWNSAMPLE {
+    // Directives
+    // input:
+    // output:
+    script:
+    """
+    # Create a 25% subsample of the input BAM file
+    java -jar \$PICARD DownsampleSam \\
+      --INPUT ${bam_file} \\
+      --OUTPUT "${sample}-25pc.bam" \\
+      --RANDOM_SEED 42 \\
+      --PROBABILITY 0.25 \\
+      --VALIDATION_STRINGENCY SILENT
 
-Last but not least, we parse summary statistics from results and log files generated by all other bioinformatics tools with **MultiQC (v.1.10.1)**. MultiQC recursively searches through any provided file paths and finds files that it recognises. It parses relevant information from these and generates a single stand-alone HTML report file. Furthermore, a multiqc_data folder will be generated as well with the reformatted compact data tables in there, one from each module in TSV format, as well as a verbose multiqc.log file and a multiqc_data.json. MultiQC's highly collaborative modules can work with the log files produced during the analysis:
-- **Cutadapt** – this module summarizes found and removed adapter sequences, primers, poly-A tails and other types of unwanted sequences, 
-- **FastQC** – the quality control module generates similar plots, which are included in the default HTML report as well. An additional fastqc_data.txt is generated too that can be helpful for downstream analysis as it is relatively easy to parse,
-- **STAR** - module parses summary statistics from the *Log.final.out* log files,
-- **featureCounts** – module parses results generated by featureCounts, visualizes the reads mapped to genes, exons, promoter, gene bodies, genomic bins, chromosomal locations or other features. The filenames must end in *'.summary'* to be discovered.
+    # Create a 50% subsample of the input BAM file
+    java -jar \$PICARD DownsampleSam \\
+      --INPUT ${bam_file} \\
+      --OUTPUT "${sample}-50pc.bam" \\
+      --RANDOM_SEED 42 \\
+      --PROBABILITY 0.50 \\
+      --VALIDATION_STRINGENCY SILENT
+
+    # Create a 75% subsample of the input BAM file
+    java -jar \$PICARD DownsampleSam \\
+      --INPUT ${bam_file} \\
+      --OUTPUT "${sample}-75pc.bam" \\
+      --RANDOM_SEED 42 \\
+      --PROBABILITY 0.75 \\
+      --VALIDATION_STRINGENCY SILENT
+    
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+        picard: \$(echo \$(java -jar \$PICARD DownsampleSam 2>&1) | grep -oP "(?<=Version:).+?(?=\\ )")
+    END_VERSIONS
+    """
+}
+```
+#### Call variants - `modules/bcftools/mpileup/main.nf`
+
+We called variants using BCFtools `mpileup` on the main BAM and 3 subsets together, piped into BCFtools `call`. The first mpileup part generates genotype likelihoods at each genomic position with coverage. The second call part makes the actual calls. 
+
+```groovy
+process BCFTOOLS_MPILEUP {
+    // Directives
+    // input:
+    // output:
+    script:
+    """
+    bcftools mpileup \\
+        --threads "${task.cpus}" \\
+        -Ou --fasta-ref "${ref_genome}" \\
+        ${bam} ${bam_sub1} ${bam_sub2} ${bam_sub3} \\
+        ${params.snv_args_mpileup} |\\
+        bcftools call \\
+        ${params.snv_args_call} > "${sample}.vcf.gz"
+
+    tabix -p vcf -f ${sample}.vcf.gz
+
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+        bcftools: \$(bcftools --version 2>&1 | head -n1 | sed 's/^.*bcftools //; s/ .*\$//')
+        tabix: \$(echo \$(tabix -h 2>&1) |  grep -oP "(?<=Version: ).+?(?=\\ )")	
+    END_VERSIONS
+    """
+}
+```
+Transcribed to:
+```bash
+# e.g. VI-3429-593-2DH-1
+bcftools mpileup \\
+    --threads 16 \\
+    -Ou --fasta-ref ref_genome.fa \\
+    VI-3429-593-2DH-1-dedup.bam VI-3429-593-2DH-1-25pc.bam VI-3429-593-2DH-1-50pc.bam VI-3429-593-2DH-1-75pc.bam \\
+    --redo-BAQ \\
+    --min-BQ 30 \\
+    --per-sample-mF \\
+    --annotate "FORMAT/DP,FORMAT/AD" |\\
+    bcftools call \\
+    --multiallelic-caller \\
+    --variants-only > VI-3429-593-2DH-1.vcf.gz
+```
+Running parameters `bcftools mpileup`:
+- `-Ou` – outputs uncompressed BCF format to standard output (u for uncompressed, O for BCF), ideal for piping into bcftools call.
+- `--redo-BAQ` – recomputes Base Alignment Quality (BAQ), which helps reduce false positives near indels
+- `--min-BQ 30` – filters out bases with base quality scores below 30, ensuring high-confidence variant calls.
+- `--per-sample-mF` – enables per-sample filtering of reads flagged as secondary, supplementary, or failing vendor quality checks: `m` corresponds to the min number of gapped reads for indel candidates (default: 1) and `F` corresponds to the min fraction of gapped reads (default: 0.002)
+- `--annotate "FORMAT/DP,FORMAT/AD"` – adds depth of coverage (DP) and allele depth (AD) annotations to the VCF output, providing insight into allele support per sample
+
+Running parameters `bcftools call`:
+- `--multiallelic-caller` – enables multiallelic calling model, allowing detection of variants with more than two alleles at the same position.
+- `--variants-only` – excludes reference sites from the output, reporting only positions with observed variants.
+
+# 4. Complete workflow
+
+Is the entry workflow, which any script can define up to one of. The complete workflow does not have a name and serves as the entrypoint of the script, that we call from the command line.
+
+```groovy
+#!/usr/bin/env nextflow
+/*
+ * Import processes from modules
+ */
+include { core_workflow } from './subworkflows/core-workflow.nf'
+include { alignment_workflow } from './subworkflows/alignment-workflow.nf'
+include { fusion_workflow } from './subworkflows/fusion-workflow.nf'
+include { variant_workflow } from './subworkflows/variant-workflow.nf'
+include { MULTIQC } from './modules/multiqc/main.nf'
+
+process COMPILE_VERSIONS {
+    input:
+    path version_files
+
+    output:
+    path "versions.yml"
+
+    script:
+    """
+    echo "---" > versions.yml
+    for f in ${version_files}; do
+    	cat \$f >> versions.yml
+    done
+    """
+}
+
+workflow {
+    /*
+     * Instantiate empty output channels
+     */
+    report_ch = Channel.empty()
+    version_ch = Channel.empty()
+    /*
+     * RNA-Seq Core Workflow
+     */
+    // Read in read fastq files
+    read_pairs_ch = Channel.fromPath(params.reads, checkIfExists: true) \
+        | splitCsv(header: true, sep: ',', strip: true) \
+        | map { row -> tuple(row.sample, file(row.read1), file(row.read2)) }
+    // Run core workflow
+    core_workflow(read_pairs_ch)
+    trimmed_reads = core_workflow.out.trimmed_reads
+    report_ch.mix(core_workflow.out.report)
+    /*
+     * RNA-Seq Alignment Workflow
+     */
+    alignment_workflow(trimmed_reads)   
+    bam_files = alignment_workflow.out.bam
+    junctions = alignment_workflow.out.junction
+    report_ch.mix(alignment_workflow.out.report)
+    /*
+     * Gene-fusion Detection Workflow
+     */
+    fusion_workflow(trimmed_reads, junctions)
+    /*
+     * Single Nucleotid Variant Calling Workflow
+     */
+    variant_workflow(bam_files)
+    report_ch.mix(variant_workflow.out.report)
+    /*
+     * MultiQC
+     */
+    MULTIQC(report_ch.collect())
+    /*
+     * Save module versions
+     */
+    version_ch.mix(
+	    core_workflow.out.version,
+	    alignment_workflow.out.version,
+	    //fusion_workflow.out.version,
+	    variant_workflow.out.version).collect()
+
+    COMPILE_VERSIONS(version_ch)
+    
+}
+```
+In the main workflow the `Channel.fromPath()` channel factory creates the input channel from the `samples.csv` file. The file rows are read in as strings, separated using `splitCsv(header: true, sep: ',', strip: true)` channel operator, and formatted into the required tuple using `map { row -> tuple(row.sample, file(row.read1), file(row.read2)) }`. 
+
+#### Generating a report - `modules/multiqc/main.nf`
+
+As a last step we produce a report by gathering and parsing summary statistics from results and log files generated by all other bioinformatics tools with **MultiQC (v.1.10.1)**. MultiQC recursively searches through any provided file paths and finds files that it recognises. 
+
+It parses relevant information from these and generates a single stand-alone HTML report file. Furthermore, a multiqc_data folder will be generated as well with the reformatted compact data tables in there, one from each module in TSV format, as well as a verbose multiqc.log file and a multiqc_data.json.
 
 Whilst MultiQC is typically used as a final reporting step in an analysis, it can also be used as an intermediate in your analysis, as these files essentially standardize the outputs from a lot of different tools and make them useful for downstream analysis. We will do that as well, going one step further with the TidyMultiqc package. The TidyMultiqc package provides the means to convert the multiqc_data.json file into a tidy data frame for downstream analysis in R. 
 
-[!IMPORTANT]
->***When logging in, all users join the login node first. It is IMPORTANT, although not compulsory on BIANCA, to move onto a computing node (using either an interactive session or an sbatch script) to perform calculations. However, memory intensive processes will be down prioritized to not block access for others (and might never be finished).***
+## 4.1. Running the Pipeline
+```bash
+nextflow run complete-workflow.nf -C nextflow.config -profile uppmax --reads $NXF_HOME/meta/samples.csv --reference $NXF_HOME/ctat-genome-lib -with-report $NXF_HOME/report.html -with-timeline $NXF_HOME/timeline.html
+```
+
+With these specification Nextflow will create an HTML execution report and another HTML timeline. The execution report includes three main sections: `summary`, `resources` and `tasks`. The summary section reports the execution status, the launch command, overall execution time and some other workflow metadata. The resources section plots the distribution of resource usage for each workflow process using the interactive plotly.js plotting library. Finally, the tasks section lists all executed tasks, reporting for each of them the status, the actual command script, and many other metrics. The rendered timeline includes all executed processes from our pipeline, where each bar represents a process run in the pipeline execution with additional textual information about the task duration time and the virtual memory size peak.
+
+> [!IMPORTANT]
+>***When running the nextflow pipeline it is IMPORTANT (!!!) to also move the working directory to $NXF_HOME. Because nextflow automatically outputs the `work/` directory to `pwd` and it can overload the allocated resource on the entry node.***

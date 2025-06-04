@@ -91,6 +91,7 @@ CREATE TABLE protein_seq (
     protein_id VARCHAR(15),
     _length INT,
     sequence LONGTEXT
+    FOREIGN KEY (protein_id) REFERENCES protein_info(protein_id)
 );
 
 DROP TABLE IF EXISTS tmp_protein_seq;
@@ -217,6 +218,7 @@ LOAD DATA LOCAL INFILE "C:\\Users\\gotar\\GitHub\\BeltingLab\\Projects\\neo-surf
 INTO TABLE domain_interactions
 FIELDS TERMINATED BY '\t'
 LINES TERMINATED BY '\n'
+IGNORE 1 LINES
 (domain_A, domain_B);
 -- Domain interactions indexes
 CREATE INDEX idx_di_domain_A ON domain_interactions(domain_A);
