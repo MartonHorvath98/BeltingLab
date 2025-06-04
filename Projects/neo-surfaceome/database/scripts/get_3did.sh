@@ -36,9 +36,6 @@ while getopts "o:" opt; do
     esac
 done
 
-# Create and activate the environment
-mamba env create -f config/buildenv.yml
-
 # DOWNLOAD THE 3DID FLAT FILE
 echo "###############################################"
 echo "# 1. Download interacting domain pairs (3DID) #"
@@ -62,14 +59,18 @@ FLAT_3DID="${output_dir}${FLAT_3DID%.gz}.dat"
 echo -e "Downloaded interacting domain pairs: ${FLAT_3DID}"
 
 # PARSE THE 3DID FLAT FILE
-echo "#############################################"
+echo "###################################################"
 echo -e "# Processing Pfam interactions from 3did_flat.dat #"
-echo "#############################################"
+echo "###################################################"
 # Create the interaction table
 input_file="${FLAT_3DID}"
-preprocessed_file="3did_interactions.tsv"
+preprocessed_file="domain_interactions.tsv"
 less "$input_file" | grep "^#=ID" | cut -f4,5 | perl -ane '
+	BEGIN { print "domain_A\tdomain_B\n" }
     $F[0] =~ s/.*(PF\d+).*/$1/;
     $F[1] =~ s/.*(PF\d+).*/$1/;
     print "$F[0]\t$F[1]\n$F[1]\t$F[0]\n";
 ' | sort -u > "${output_dir}/${preprocessed_file}"
+
+echo -e "Processed interactions saved to: ${output_dir}/${preprocessed_file}"
+rm ${FLAT_3DID} || (echo "Error removing ${FLAT_3DID}" && exit 1)
