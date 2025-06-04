@@ -38,10 +38,9 @@ WHERE pdm.gene_id = GeneId
 END$$
 DELIMITER ;
 -- DROP procedure PerturbedDomains;
-
 CALL PerturbedDomains("ENSG00000146648",150);
 -- 1) EGFR (150) - 95 row(s) returned 0.313 sec [e.g. PTK2, PIK3R2, JAK2, etc.]
-CALL PerturbedDomains("ENSG00000162493",150);
+CALL PerturbedDomains("ENSG00000162493",70);
 -- 2) PDPN (70) - 0 row(s) returned 0.219 sec
 CALL PerturbedDomains("ENSG00000026508",70);
 -- 3) CD44 (70) - 2 row(s) returned 0.641 sec [e.g. TNFAIP6, VCAN]

@@ -3,7 +3,7 @@
 - [Surface Protein Interaction Database](#surface-protein-interaction-database)
   - [1. Download and Parse Data](#1-download-and-parse-data)
   - [2. Database initialization](#2-database-initialization)
-  - [3. Query optimization](#4-query-optimization)
+  - [3. Query optimization](#3-query-optimization)
 
 We have developed the SURFME Interactome DB database inspired by, and based on the work of [Kharaman *et al.* (2020)](https://doi.org/10.1038/s41598-020-71221-5), and their source code shared in their GitHub repository - [CanIsoNet](https://github.com/abxka/CanIsoNet).
 
@@ -354,3 +354,344 @@ if __name__ == "__main__":
 # 2. Database initialization
 
 ![SQLflow](../meta/figures/SQLflow.png "SQLflow, source: https://sqlflow.gudusoft.com/#/")
+
+We used [MySQL Workbench80](https://dev.mysql.com/doc/workbench/en/), a graphical tool, to develop the database. MySQL Workbench fully supports MySQL server 8.0, enabling us to create and manage connections to database servers. Along with enabling you to configure connection parameters, MySQL Workbench provides the capability to execute SQL queries on the database connections using the built-in SQL Editor. We created the `init.sql` script, where first we have to enable the loading of local files: 
+```sql
+SET GLOBAL local_infile=1; -- <- set 'ON' to load files from local machine
+```
+Alternately, setting this in my.cnf:
+```yaml
+[mysqld]
+local_infile=ON
+```
+Then, we started creating and populating the different tables...
+
+### SURFME filter table
+
+Including all the gene IDs from the SURFME classifier:
+```sql
+CREATE TABLE surfme_filter (
+	gene_id VARCHAR(15) PRIMARY KEY
+);
+-- LOAD DATA LOCAL INFILE "<absolute-local-path>\\data\\surfme_genes.txt"
+LOAD DATA INFILE '/docker-entrypoint-initdb.d/data/surfme_genes.txt'
+INTO TABLE surfme_filter
+FIELDS TERMINATED BY '\t' -- <- tab-delimited file
+LINES TERMINATED BY '\n' -- <- row separated by '\n'
+IGNORE 1 LINES -- <- don't read in the header line 
+(gene_id); -- <- new header name
+```
+### Protein information table
+
+From the parsed STRING annotation file, to which we also want to add the UniProtKB IDs later on. Hence, after the data table is created we `ALTER` it to accomodate the new columns, which we insert based on matching the primary key: `protein id` (*=STRING ID*): 
+```sql
+CREATE TABLE protein_info (
+	protein_id VARCHAR(15) PRIMARY KEY, -- <- Primary key for protein records, UNIQUE
+    protein_name VARCHAR(255),
+    protein_size INT,
+    annotation VARCHAR(255)
+);
+-- LOAD DATA LOCAL INFILE "<absolute-local-path>\\data\\protein_info_clean.txt"
+LOAD DATA INFILE '/docker-entrypoint-initdb.d/data/protein_info_clean.txt'
+INTO TABLE protein_info
+FIELDS TERMINATED BY '\t' -- <- tab-delimited file
+LINES TERMINATED BY '\n'
+IGNORE 1 LINES -- <- don't read in the header line
+(protein_id, protein_name, protein_size, annotation);
+-- Add UniProt ID column
+ALTER TABLE protein_info
+ADD COLUMN uniprot_id VARCHAR(10) AFTER protein_name,
+ADD COLUMN uniprot_name VARCHAR(16) AFTER uniprot_id;
+
+CREATE TEMPORARY TABLE tmp_uniprot_mapping (
+    uniprot_id VARCHAR(10),
+    uniprot_name VARCHAR(16),
+    protein_id VARCHAR(15),
+    preferred_name VARCHAR(255)
+);
+-- LOAD DATA LOCAL INFILE "<absolute-local-path>\\data\\uniprot_ID_mapping_clean.txt"
+LOAD DATA INFILE '/docker-entrypoint-initdb.d/data/uniprot_ID_mapping_clean.txt'
+INTO TABLE tmp_uniprot_mapping
+FIELDS TERMINATED BY '\t'
+LINES TERMINATED BY '\n'
+IGNORE 1 LINES
+(uniprot_id, uniprot_name, protein_id, preferred_name);
+
+UPDATE protein_info pi
+JOIN tmp_uniprot_mapping um  -- <- match the records
+  ON pi.protein_id = um.protein_id
+SET pi.uniprot_id = um.uniprot_id, -- <- insert new column values
+    pi.uniprot_name = um.uniprot_name;
+
+DROP TABLE IF EXISTS tmp_uniprot_mapping;
+CREATE INDEX idx_protein_id ON protein_info(protein_id); -- <-- Protein info index
+```
+### Transcript informations table
+
+Next, we read in the transcript informations from the table parsed from the GENCODE `.gtf`annotation: 
+```sql
+CREATE TABLE gene_info (
+	transcript_id VARCHAR(15) PRIMARY KEY, 
+    chromosome VARCHAR(5),
+    _start INT,
+    _stop INT,
+    strand VARCHAR(1),
+    _length INT,
+    transcript_type VARCHAR(255),
+    protein_id VARCHAR(15),
+    gene_id VARCHAR(15),
+    gene_symbol VARCHAR(15),
+    hgnc_symbol VARCHAR(15)
+);
+-- LOAD DATA LOCAL INFILE "<absolute-local-path>\\data\\gene_info.txt"
+LOAD DATA INFILE '/docker-entrypoint-initdb.d/data/gene_info.txt'
+INTO TABLE gene_info
+FIELDS TERMINATED BY '\t'
+LINES TERMINATED BY '\n'
+IGNORE 1 LINES
+(transcript_id, chromosome, _start, _stop, strand, _length, transcript_type, protein_id, gene_id, gene_symbol, hgnc_symbol);
+
+CREATE INDEX idx_transcript_id ON gene_info(transcript_id); -- <-- gene info indexes
+CREATE INDEX idx_gene_info_protein_id ON gene_info(protein_id);
+CREATE INDEX idx_gene_info_gene_id ON gene_info(gene_id);
+```
+
+### Protein sequences table
+
+Next, we loaded protein sequences. In the CTAT genome library the `ref_annot.pep` file containing the amino-acid sequences of the canonical protein isoforms, has the transcript IDs in its header. This we want to replace it with theprotein IDs, so we first load the records in a temporary table, then merge in the desired column:
+```sql
+CREATE TABLE protein_seq (
+    protein_id VARCHAR(15),
+    _length INT,
+    sequence LONGTEXT
+    FOREIGN KEY (protein_id) REFERENCES protein_info(protein_id)
+);
+CREATE TEMPORARY TABLE tmp_protein_seq ( -- <-- temporary table
+    transcript_id VARCHAR(15),
+    _length INT,
+    sequence LONGTEXT
+);
+-- LOAD DATA LOCAL INFILE "<absolute-local-path>\\data\\protein_sequences.txt"
+LOAD DATA INFILE '/docker-entrypoint-initdb.d/data/protein_sequences.txt'
+INTO TABLE tmp_protein_seq
+FIELDS TERMINATED BY '\t'
+LINES TERMINATED BY '\n'
+IGNORE 1 LINES
+(transcript_id, _length, sequence);
+
+INSERT INTO protein_seq (protein_id, _length, sequence)
+SELECT -- <-- update transcript IDs to correct protein_ids
+    gi.protein_id,
+    tps._length,
+    tps.sequence
+FROM tmp_protein_seq tps
+-- <-- inner join with gene_info
+JOIN gene_info gi ON tps.transcript_id = gi.transcript_id 
+WHERE gi.protein_id IS NOT NULL; -- <-- keep only known sequences
+DROP TABLE IF EXISTS tmp_protein_seq;
+```
+
+### Transcript sequences table
+
+```sql
+CREATE TABLE transcript_seq (
+	transcript_id VARCHAR(15) PRIMARY KEY, 
+    _length INT,
+    sequence LONGTEXT,
+    FOREIGN KEY (transcript_id) REFERENCES gene_info(transcript_id)
+);
+-- LOAD DATA LOCAL INFILE "<absolute-local-path>\\data\\transcript_sequences.txt"
+LOAD DATA INFILE '/docker-entrypoint-initdb.d/data/transcript_sequences.txt'
+INTO TABLE transcript_seq
+FIELDS TERMINATED BY '\t'
+LINES TERMINATED BY '\n'
+IGNORE 1 LINES
+(transcript_id, _length, sequence);
+```
+
+### STRING protein-protein interaction (PPI) table
+
+Load the records of protein-protein interactions and their confidence score from the parsed file from STRING db. The detailed interactions collect six different scores: `neighborhood score`, computed from the inter-gene nucleotide count; `fusion score`, derived from fused proteins in other species; `cooccurrence score`, derived from similar absence/presence patterns of genes in the phyletic profile; `coexpression score`, derived from similar pattern of mRNA expression *e.g., measured by DNA arrays*; `experimental score`, derived from experimental data, *e.g., affinity chromatography*; `database score`, derived from curated data of various databases; and `textmining score`, derived from the co-occurrence of gene/protein names in abstracts. This was by far the biggest data table in the collection, containing `13715404 row(s)` and requiring `1527.672 sec` (*>25 minutes*) to load:  
+```sql
+CREATE TABLE protein_interactions (
+	protein_A VARCHAR(15), 
+    protein_B VARCHAR(15),
+    neighborhood_score INT,
+    fusion_score INT,
+    cooccurence_score INT,
+    coexpression_score INT,
+    experimental_score INT,
+    database_score INT,
+    textmining_score INT,
+    combined_score INT,
+    FOREIGN KEY (protein_A) REFERENCES protein_info(protein_id),
+    FOREIGN KEY (protein_B) REFERENCES protein_info(protein_id)
+);
+-- LOAD DATA LOCAL INFILE "<absolute-local-path>\\data\\protein_links_clean.txt"
+LOAD DATA INFILE '/docker-entrypoint-initdb.d/data/protein_links_clean.txt'
+INTO TABLE protein_interactions
+FIELDS TERMINATED BY '\t'
+LINES TERMINATED BY '\n'
+IGNORE 1 LINES
+(protein_A, protein_B, neighborhood_score, fusion_score, cooccurence_score,
+ coexpression_score, experimental_score, database_score, textmining_score, combined_score
+);
+CREATE INDEX idx_protein_A ON protein_interactions(protein_A); -- <-- PPI indexes
+CREATE INDEX idx_protein_B ON protein_interactions(protein_B);
+```
+
+### Domain informations table
+
+```sql
+CREATE TABLE domain_info (
+	domain_id VARCHAR(7) PRIMARY KEY, 
+    domain_name VARCHAR(255),
+    annotation VARCHAR(255)
+);
+-- LOAD DATA LOCAL INFILE "<absolute-local-path>\\data\\pfam_domains.txt"
+LOAD DATA INFILE '/docker-entrypoint-initdb.d/data/pfam_domains.txt'
+INTO TABLE domain_info
+FIELDS TERMINATED BY '\t'
+LINES TERMINATED BY '\n'
+IGNORE 1 LINES
+(domain_id, domain_name, annotation);
+CREATE INDEX idx_domain_id ON domain_info(domain_id); -- <-- domain info index
+```
+
+### Domain annotation table
+
+We extracted information about the predicted pfam domains, mapped on the canonical transcripts using `hmmscan`. These informations were loaded into the domain annotation table:
+```sql
+CREATE TABLE domain_annotation (
+	transcript_id VARCHAR(15),
+	protein_length INT,
+    domain_id VARCHAR(7),
+	domain_length INT,
+	domain_start INT,
+	domain_end INT,
+    accuracy FLOAT,
+	score FLOAT,
+	E_value FLOAT,
+    FOREIGN KEY (transcript_id) REFERENCES gene_info(transcript_id),
+    FOREIGN KEY (domain_id) REFERENCES domain_info(domain_id)
+);
+
+-- LOAD DATA LOCAL INFILE "<absolute-local-path>\\data\\transcript_domain_annotation.txt"
+LOAD DATA INFILE '/docker-entrypoint-initdb.d/data/transcript_domain_annotation.txt'
+INTO TABLE domain_annotation
+FIELDS TERMINATED BY '\t'
+LINES TERMINATED BY '\n'
+IGNORE 1 LINES
+(transcript_id, protein_length, domain_id, domain_length, domain_start, domain_end, accuracy, score, E_value);
+CREATE INDEX idx_da_transcript_id ON domain_annotation(transcript_id); -- <-- domain annotation indexes
+CREATE INDEX idx_da_domain_id ON domain_annotation(domain_id);
+```
+
+### Domain interaction table
+
+Domain interactions were parsed from the 3DID flat data file, containing pairs of physically interacting Pfam domains with matched annotation in the [Protein structure Data Bank](https://www.rcsb.org/) (PDB):
+```sql
+CREATE TABLE domain_interactions (
+	domain_A VARCHAR(15), 
+    domain_B VARCHAR(15),
+    FOREIGN KEY (domain_A) REFERENCES domain_info(domain_id),
+    FOREIGN KEY (domain_B) REFERENCES domain_info(domain_id)
+);
+
+-- LOAD DATA LOCAL INFILE "<absolute-local-path>\\data\\domain_interactions.txt"
+LOAD DATA INFILE '/docker-entrypoint-initdb.d/data/domain_interactions.txt'
+INTO TABLE domain_interactions
+FIELDS TERMINATED BY '\t'
+LINES TERMINATED BY '\n'
+IGNORE 1 LINES
+(domain_A, domain_B);
+CREATE INDEX idx_di_domain_A ON domain_interactions(domain_A); -- <-- DDI indexes
+CREATE INDEX idx_di_domain_B ON domain_interactions(domain_B);
+```
+
+# 3. Query optimization
+
+We tested two common use cases: 
+- "retrieving the positions of interacting domains for a given protein", and
+- "identifying interaction partners potentially disrupted by a mutation at a specific residue"
+
+The first query averaged `13.26 seconds (SE: 3.00 s)`, while the second query – more computationally intensive – took on average `199.5 seconds (SE: 27.11s)` to complete, while in half of the cases where high-confidence Pfam domains were found (8/16), the second query failed altogether due to server timeout after 300 seconds. These runtimes clearly fall short of expectations for a responsive, user-facing system.
+
+Hence, we implemented a series of query optimization techniques...
+
+### Creating pre-filtered temporary table
+
+We applied filters on two of the data tables, namely the `domain annotation`and the `protein interactions` table. As we only wanted to include high-confidence predicted domains and high-confidence PPIs, we set the thresholds `accuracy > 0.9` and `E-value < 0.05`, and `combined score > 900`, respectively. Although these inline checks do not add complexity to the queries - `O(1)` - prefiltering the tables reduces the calculation time needed for joins on these tables:
+```sql
+CREATE TEMPORARY TABLE tmp_high_conf_domain_annotation AS
+SELECT * 
+FROM domain_annotation
+WHERE accuracy >= 0.9 AND E_value < 0.05;
+
+CREATE TEMPORARY TABLE tmp_high_conf_protein_interactions AS
+SELECT * 
+FROM protein_interactions
+WHERE combined_score >= 900;
+```
+
+### Materializing itermediate results
+
+We materialized two tables that a most often used for these two above mentioned queries that we anticipate mostly from our users. With these tables we can drastically reduce the number of `JOIN` operations, and the length of the tables we merge.
+
+```sql
+CREATE TABLE protein_domain_map AS
+SELECT gi.gene_id, pi.protein_id, di.domain_id, di.domain_name, da.domain_start, da.domain_end
+FROM gene_info gi
+JOIN protein_info pi ON gi.protein_id = pi.protein_id
+JOIN tmp_high_conf_domain_annotation da ON gi.transcript_id = da.transcript_id
+JOIN domain_info di ON da.domain_id = di.domain_id;
+
+CREATE TABLE domain_domain_protein_map AS
+SELECT DISTINCT pdm1.gene_id AS GeneA, pdm1.domain_id AS DomainA, pdm2.domain_id AS DomainB, pdm2.gene_id AS GeneB 
+FROM tmp_high_conf_protein_interactions pi
+JOIN protein_domain_map pdm1 ON pi.protein_A = pdm1.protein_id
+JOIN protein_domain_map pdm2 ON pi.protein_B = pdm2.protein_id
+JOIN domain_interactions ddi 
+  ON ddi.domain_A = pdm1.domain_id AND ddi.domain_B = pdm2.domain_id;
+```
+
+### Stored procedures
+
+Finally, we save these two predominant queries as stored procedures, that can be reused over and over again with various user inputs. These procedures can be executed by passing parameters, so that the stored procedure can act based on the parameter value(s) that is passed.
+
+```sql
+-- Query 1) retrieving the positions of interacting domains for a given protein
+DELIMITER $$
+CREATE PROCEDURE MapDomains ( IN GeneId nvarchar(15))
+BEGIN
+SELECT DISTINCT gi.transcript_id, gi.gene_symbol, pi.protein_size, di.domain_name, da.domain_start, da.domain_end
+FROM gene_info gi
+JOIN protein_info pi ON gi.protein_id = pi.protein_id
+JOIN tmp_high_conf_domain_annotation da ON gi.transcript_id = da.transcript_id
+JOIN domain_info di ON da.domain_id = di.domain_id
+WHERE gi.gene_id = GeneId;
+END$$
+DELIMITER ;
+-- e.g., "EGFR" --> EXEC MapDomains("ENSG00000146648");
+
+-- Query 2) identifying interaction partners potentially disrupted by a mutation at a specific residue
+DELIMITER $$
+CREATE PROCEDURE PerturbedDomains ( IN GeneId nvarchar(15), SnvLoc int)
+BEGIN
+SELECT DISTINCT gi1.gene_symbol AS affected_gene,
+	ddi.DomainA AS affected_domain,
+    ddi.DomainB AS potentially_disrupted_ddi,
+    gi2.gene_symbol AS potentially_disrupted_partner
+FROM protein_domain_map pdm
+JOIN domain_domain_protein_map ddi ON pdm.gene_id = ddi.GeneA AND pdm.domain_id = ddi.DomainA
+JOIN gene_info gi1 ON ddi.GeneA = gi1.gene_id
+JOIN gene_info gi2 ON ddi.GeneB = gi2.gene_id
+WHERE pdm.gene_id = GeneId
+	AND SnvLoc BETWEEN pdm.domain_start AND pdm.domain_end;
+END$$
+DELIMITER ;
+-- e.g., ("EGFR", 100) --> EXEC PeturbedDomains("ENSG00000146648", 100);
+```
+
+:rewind: *[Return](../README.md#nsfw-neo-surfaceome-feature-workbench) to the main README file...* 
+:fast_forward: *[Go to](../shiny-app/README.md) the R Shiny app's README file...* 

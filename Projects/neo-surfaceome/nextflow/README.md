@@ -788,3 +788,6 @@ With these specification Nextflow will create an HTML execution report and anoth
 
 > [!IMPORTANT]
 >***When running the nextflow pipeline it is IMPORTANT (!!!) to also move the working directory to $NXF_HOME. Because nextflow automatically outputs the `work/` directory to `pwd` and it can overload the allocated resource on the entry node.***
+
+:rewind: *[Return](../README.md#surfme-interactome-db) to the main README file...* 
+:fast_forward: *[Go to](../database/README.md) the MySQL database's README file...* 
