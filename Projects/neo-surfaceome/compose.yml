@@ -6,7 +6,7 @@ services:
     container_name: neo-db
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: pw
+      MYSQL_ROOT_PASSWORD: pw # replace with actual pasword
       MYSQL_DATABASE: InteractomeDB
     volumes:
       - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -28,7 +28,7 @@ services:
     environment:
       DB_HOST: db
       DB_USER: root
-      DB_PASSWORD: pw
+      DB_PASSWORD: pw # replace with actual pasword
       DB_NAME: InteractomeDB
       DB_PORT: 3306
     networks:
