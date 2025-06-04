@@ -1,4 +1,34 @@
-# CHANGELOG 
+## v9 (2025-06-04)
+
+*  Update: Nextflow migration of database setup [neo-surfaceome] [View](https://bitbucket.org/projects/test/repos/my-project/commits/99f1ada8336ef72079bd3e13076bb9170ace9523)
+*  Update: Nextflow processes [neo-surfaceome] [View](https://bitbucket.org/projects/test/repos/my-project/commits/81c6e4d4d7197cb91b89824b30832adcdabd9fd8)
+*  Nextflow update: working core analysis [View](https://bitbucket.org/projects/test/repos/my-project/commits/24b7b4eaeb3ef9a79835bc25c1989c29f3debb4c)
+*  Proj acid: updated visualization [View](https://bitbucket.org/projects/test/repos/my-project/commits/b00d3f79118f43cfe9dc430af686b14a6af7027e)
+*  Nextflow update: finished core workflow [View](https://bitbucket.org/projects/test/repos/my-project/commits/c06de628fe14b43f659247b882a71635c02a1204)
+*  Project update: separate core and advanced workflows [View](https://bitbucket.org/projects/test/repos/my-project/commits/ef2c5b761bdd790eb22d77f5bb7df4358722bca7)
+*  Core analysis: added QC steps [View](https://bitbucket.org/projects/test/repos/my-project/commits/915f4413cd2cef5bc6aebd6a90905c9c1cbfd97a)
+*  Proj update: core running on BIANCA [View](https://bitbucket.org/projects/test/repos/my-project/commits/e3efcea6c0395b8444854035723ce32cfddf1f73)
+*  Proj update: acidosis - visualization update [View](https://bitbucket.org/projects/test/repos/my-project/commits/d75b2e486fc6dc32128169739b02de3d1a42eac0)
+*  Project added: RASTEN NSCLC cohort [View](https://bitbucket.org/projects/test/repos/my-project/commits/9b5157be56106936b93497f34239b895c08ea0c8)
+*  Proj update: core running on BIANCA [View](https://bitbucket.org/projects/test/repos/my-project/commits/0511ae4e510d2e74f7308930f91e6546553012a9)
+*  Proj update: acidosis - visualization update [View](https://bitbucket.org/projects/test/repos/my-project/commits/8be4b8d2a900ed75836bc8ec374007035b9bd69f)
+*  Project added: RASTEN NSCLC cohort [View](https://bitbucket.org/projects/test/repos/my-project/commits/f82dc021e9dcd15628a5022344f0a61cccc14391)
+*  Proj update: neosurf - final nextflow pipeline, database, shiny-app [View](https://bitbucket.org/projects/test/repos/my-project/commits/0907cee30da8dd871edefcc02bb4418c47737ad9)
+*  Proj update: Neosurf - Update README.md [View](https://bitbucket.org/projects/test/repos/my-project/commits/bf05dcf1bc462c848ae1b60c5b367a7bd6f482f1)
+*  Proj update: Neosurf - Add README.md to Nextflow pipeline [View](https://bitbucket.org/projects/test/repos/my-project/commits/2b4520ab6a2a2be575c1981d6b78e1398047a70c)
+*  Project update: Neosurf - Update Nextflow README [View](https://bitbucket.org/projects/test/repos/my-project/commits/9d56173e9ef7b46f0d055958fd80fb774d74dc17)
+*  Proj update: Neosurf - Finish Nextflow README, add DB README [View](https://bitbucket.org/projects/test/repos/my-project/commits/f5aec5706f29486fa3e4bea2822545909b78ed16)
+*  Proj update: Neosurf - Finish DB README and Shiny README [View](https://bitbucket.org/projects/test/repos/my-project/commits/00763ee7dc51e3008183d47572e738c46cedf067)
+*  Proj update: Neosurf - Fix DB README [View](https://bitbucket.org/projects/test/repos/my-project/commits/28a783565882179ed4b9699b9c95b7468e6cea4c)
+
+
+## v8 (2025-04-02)
+
+*  Update README files [View](https://bitbucket.org/projects/test/repos/my-project/commits/300876f795e6ed061461409df6c9092e8e31236d)
+*  Update README files [View](https://bitbucket.org/projects/test/repos/my-project/commits/ebd04b80aa191576a3fe73e301cd836eda71d37b)
+*  Update README files [View](https://bitbucket.org/projects/test/repos/my-project/commits/330fce669e7105e52a01870cf483f9d9fa323377)
+*  Project update: Initiate Nextflow migration [neo-surfaceome] [View](https://bitbucket.org/projects/test/repos/my-project/commits/cc5940dd5538de680fcb233292e2fb4db5dca0c8)
+
 
 ## v7.1 (2025-04-01)
 
