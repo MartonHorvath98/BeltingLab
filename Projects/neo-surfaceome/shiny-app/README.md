@@ -142,7 +142,7 @@ The query outputs the affected domain(s) caused by the variant location, replaci
 > ***QC has not been realized yet on he user input. Non-existent 'geneID'-s or out-of-range 'SNV positions' do not break the program, but the reponse is not curated to explain the user's error.***
 
 # 4. Dockerization
-
+![docker-network](../meta/figures/docker-network.png)
 The app is containerized using rocker/shiny as base:
 ```dockerfile
 FROM rocker/shiny
