@@ -136,6 +136,9 @@ suppressPackageStartupMessages(library(KEGGREST))
 if (!requireNamespace("msigdbr", quietly = TRUE))
     BiocManager::install("msigdbr", update = FALSE)
 suppressPackageStartupMessages(library(msigdbr))
+if (!requireNamespace("enrichplot", quietly = TRUE))
+    BiocManager::install("enrichplot", update = FALSE)
+suppressPackageStartupMessages(library(enrichplot))
 if (!requireNamespace("reactome.db", quietly = TRUE))
     BiocManager::install("reactome.db", update = FALSE)
 suppressPackageStartupMessages(library(reactome.db))
@@ -145,9 +148,20 @@ suppressPackageStartupMessages(library(GSVA))
 if (!requireNamespace("rrvgo", quietly = TRUE))
   BiocManager::install("rrvgo", update = FALSE)
 suppressPackageStartupMessages(library(rrvgo))
+
+################################################################################
+# 5. Network analysis and visualization packages                               #
+################################################################################
 if (!requireNamespace("igraph", quietly = TRUE))
   BiocManager::install("igraph", update = FALSE)
 suppressPackageStartupMessages(library(igraph))
+if (!requireNamespace("RCy3", quietly = TRUE))
+  BiocManager::install("RCy3", update = FALSE)
+suppressPackageStartupMessages(library(RCy3))
+
+################################################################################
+# 5. Gene signature analysis                                                   #
+################################################################################
 if (!requireNamespace("hacksig", quietly = TRUE))
   BiocManager::install("hacksig", update = FALSE)
 suppressPackageStartupMessages(library(hacksig))

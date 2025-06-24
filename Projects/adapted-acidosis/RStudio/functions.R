@@ -629,15 +629,13 @@ getEnrichmentTable <- function(.df, .order, .name){
              NES = round(NES, 4),
              FDR = round(p.adjust, 4)) %>%
            dplyr::mutate(FDR = case_when(
-             FDR < 0.001 ~ paste("<0.001", "(***)"),
-             FDR < 0.01 ~ paste(as.character(FDR), "(**)"),
-             FDR < 0.05 ~ paste(as.character(FDR), "(*)"),
+             FDR < 0.01 ~ "***",
+             FDR < 0.05 ~ "**",
+             FDR < 0.1 ~ "*",
              TRUE ~ as.character(FDR),
            )) %>% 
            dplyr::select(c(NES, FDR)))
 }
-
-
 
 # ---------------------------------------------------------------------- #
 # Function - Cluster analysis                                            #
@@ -927,14 +925,14 @@ plotClusters <- function(.df, .pathways){
                  aes(x = NES, y = -log10(p.adjust), colour = Category), 
                  show.legend = F, size = 5, alpha = 0.7)
     # Label the terms of interest
-    + geom_label_repel(
-      data = subset(df, ID %in% .pathways$ID & Category == facet_var),
-      aes(x = NES, y = -log10(p.adjust), color = Category, 
-          label = str_wrap(gsub("_"," ",Name), 25)),
-      size = 5, max.overlaps = 100, min.segment.length = 0,
-      arrow = arrow(type = "closed", angle = 15, length = unit(0.1,"in")),
-      box.padding = unit(1.5,"in"), point.padding = unit(0.1,"in"),
-      force = 1, direction = "both")
+    # + geom_label_repel(
+    #   data = subset(df, ID %in% .pathways$ID & Category == facet_var),
+    #   aes(x = NES, y = -log10(p.adjust), color = Category, 
+    #       label = str_wrap(gsub("_"," ",Name), 25)),
+    #   size = 5, max.overlaps = 100, min.segment.length = 0,
+    #   arrow = arrow(type = "closed", angle = 15, length = unit(0.1,"in")),
+    #   box.padding = unit(1.5,"in"), point.padding = unit(0.1,"in"),
+    #   force = 1, direction = "both")
     + scale_color_manual(values = c("ECM"="#7E03A8FF",
                                     "HYPOXIA"="#F00000FF",
                                     "TGFb"="#09BFF9FF"))

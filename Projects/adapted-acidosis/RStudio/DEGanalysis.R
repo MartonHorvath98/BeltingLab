@@ -1,41 +1,49 @@
-# Created: 2024 10  07 ; Last Modified: 2025 01 20
-# MH
 ################################################################################
-#                     Set up the environment                                   #
+# Created: 2024 10 07 ; Last Modified: 2025 06 24 ; MH                        #
 ################################################################################
+# ---------------------- Set up the environment -----------------------------  #
 # Set working directory
 wd <- getwd()
-
 path <- c("data/processed/")
 files <- list.files(file.path(wd, path),
                     pattern = ".xlsx$", full.names = TRUE)
 date <- Sys.Date()
 # Load packages
-source(file = file.path(wd, "packages.R"))
+if (file.exists(file.path(wd, "packages.R"))) {
+  source(file = file.path(wd, "packages.R"))
+} else {
+  stop("Required file 'packages.R' not found in the working directory.")
+}
 # Source data processing functions
-source(file = file.path(wd, "functions.R"))
+if (file.exists(file.path(wd, "functions.R"))) {
+  source(file = file.path(wd, "functions.R"))
+} else {
+  stop("Required file 'functions.R' not found in the working directory.")
+}
 
 # load databases
 msigdbr_df <- msigdbr(species = "Homo sapiens") # save local database
 
+# Filter KEGG and Reactome pathways
 pathways <- msigdbr_df %>% 
   dplyr::filter(
     gs_cat == "C2", # only canonical representations (compiled by experts)
     gs_subcat %in% c("CP:KEGG", "CP:REACTOME") # KEGG and Reactome pathways
   )
-
+# Filter Hallmakr and GO:BP gene sets
 terms <- msigdbr_df %>% 
   dplyr::filter(
     gs_cat == "H" | # Hallmark gene sets
     gs_cat == "C5" & # Ontology gene sets
     gs_subcat == "GO:BP" # GO terms, biological processes
   )
+# standardize gene set labels
 terms <- terms %>% 
   dplyr::rowwise(.) %>% 
   dplyr::mutate(gs_subcat = ifelse(gs_cat == "H", "HALLMARK", gs_subcat),
                 gs_exact_source = ifelse(gs_cat == "H", gs_id, gs_exact_source)) %>% 
   dplyr::ungroup(.)
-
+# add colour palette
 DEG_palette <- c("NS" = '#c1c1c1',
                  "Log10P" = '#363636',
                  "Log2FoldChange" = '#767676',
@@ -111,7 +119,79 @@ CCLD.GSEA <- c(CCLD.GSEA, extract_gsea_results(.gsea = CCLD.GSEA$gsea, .db = pat
 openxlsx::write.xlsx(CCLD.GSEA[c(2:3)],
                      file.path(wd, results_dir,  date, "tables", "LDvsnoLD_all_pathway_GSEA.xlsx"))
 
-# ---- 2.) Hugo's Primary cells 2D vs 3D (Clariom D Human Pico) Affymetrix ---- #
+# Visualize selected enrichment scores 
+palette = c("EXTRACELLULAR_MATRIX_ORGANIZATION" = "#380186",
+            "GLYCOSAMINOGLYCAN_METABOLISM" = "#8D00FA",
+            "PROTEOGLYCAN_METABOLIC_PROCESS" = "#E70041",
+            "CHONDROITIN_SULFATE_DERMATAN_SULFATE_METABOLISM" = "#FF08FF",
+            "FAT_CELL_DIFFERENTIATION" = "#000000")
+# Identify indices of selected pathways/GO terms in GSEA and GO results
+pathway.ranks = which(CCLD.GSEA$df$Name %in% names(palette))
+go.ranks = which(CCLD.GO$df$Name %in% names(palette))
+
+# Extract running enrichment scores for selected gene sets
+CCLD.enrichplot <- list()
+CCLD.enrichplot$runningScores  <- do.call(rbind, c(lapply(pathway.ranks, gsInfo, object = CCLD.GSEA$gsea),
+                                                   lapply(go.ranks, gsInfo, object = CCLD.GO$gsea)))
+# Clean up pathway/GO term names for plotting
+CCLD.enrichplot$runningScores$Description <- factor(
+  gsub(x = CCLD.enrichplot$runningScores$Description, pattern = "REACTOME_|GOBP_", replacement =  ""),
+  levels = names(palette))
+
+# Plot running enrichment scores for selected gene sets
+p1 <- plotRunningScore(.df = CCLD.enrichplot$runningScores, 
+                       .x = "x", .y = "runningScore", 
+                       .color = "Description", .palette = palette)
+
+# Plot gene ranks for selected gene sets, faceted by pathway/GO term
+p2 <- plotGeneRank(.df = CCLD.enrichplot$runningScores, 
+                   .x = "x", .facet = "Description~.",
+                   .color = "Description", .palette = palette)
+
+# Prepare summary table of enrichment results for selected gene sets
+CCLD.enrichplot$table <- rbind(CCLD.GSEA$df[pathway.ranks,],
+                               CCLD.GO$df[go.ranks,]) %>% 
+  dplyr::arrange(order(match(Name, names(palette)))) %>% 
+  tibble::remove_rownames() %>% 
+  tibble::column_to_rownames("Name") %>%
+  dplyr::mutate(
+    NES = round(NES, 4),
+    FDR = round(p.adjust, 4)) %>%
+  dplyr::mutate(FDR = case_when(
+    # ***P< 0.01, **P< 0.05, and *P< 0.1
+    FDR < 0.01 ~ paste("***"),
+    FDR < 0.05 ~ paste("**"),
+    FDR < 0.1 ~ paste("*"),
+    TRUE ~ as.character(FDR),
+  )) %>% 
+  dplyr::select(c(5,13))
+
+# Create a table grob for displaying enrichment summary
+table_grob <- tableGrob(
+  CCLD.enrichplot$table, 
+  theme = ttheme_minimal(
+    base_size = 14,
+    core = list(
+      fg_params = list(hjust = 0.5, x = 0.5, col = palette)),
+    rowhead = list(
+      fg_params = list(hjust = 0, x = 0,col = palette[c(5,1,2,3,4)]))
+  )) 
+
+# Combine running score and gene rank plots into a single figure
+(CCLD.enrichplot$plot <- cowplot::plot_grid(
+  p1, p2,
+  byrow = T, nrow = 2, ncol = 1, scale = .95, 
+  rel_heights = c(1.2,1), axis = "r",
+  margins = c(0.5, 0.5, 0.5, 0.5)))
+
+# Save the combined enrichment plot as an SVG file
+ggsave(file.path(wd, results_dir,  date, "plots", "CCLD_GSEA.svg"), 
+       device = "svg", plot = CCLD.enrichplot$plot, 
+       bg = "white", width = 6, height = 4.45, units = "in")
+
+# ---------------------------------------------------------------------------- #
+# -   2.) Hugo's Primary cells 2D vs 3D (Clariom D Human Pico) Affymetrix    - #
+# ---------------------------------------------------------------------------- #
 results_dir <- "Results/HGCC"
 dir.create(file.path(wd, results_dir, date), recursive = T, showWarnings = FALSE)
 
@@ -197,6 +277,7 @@ ggsave(file.path(wd, results_dir, date, "plots", "HGCC_VENN_plot.png"), bg = "wh
 ggsave(file.path(wd, results_dir, date, "plots", "HGCC_Vulcano_plot.png"), bg = "white",
        HGCC.plots$vulcano, width = 18, height = 6, dpi = 300)
 
+# remove intermediate results
 rm(list = c("pca_base","p1","p2","p3","samples"))
 
 ### Over-representation (ORA) and Gene Set Enrichment Analysis (GSEA)
@@ -262,7 +343,342 @@ sapply(names(HGCC.GSEA), function(x){
                                  paste0("HGCC_", x, "_all_pathway_GSEA.xlsx")))
 })
 
-# ---- 3.) U87 Chronic Acidosis AA vs NA & HOX vs NOX (Illumina BeadChip) ---- #
+# Combine enrichment results for CCLD and HGCC cell lines
+GSEA.object = list(
+  U3017 = HGCC.GSEA$U3017$gsea,
+  U3047 = HGCC.GSEA$U3047$gsea,
+  U3054 = HGCC.GSEA$U3054$gsea,
+  CCLD = CCLD.GSEA$gsea
+)
+GO.object = list(
+  U3017 = HGCC.GO$U3017$gsea,
+  U3047 = HGCC.GO$U3047$gsea,
+  U3054 = HGCC.GO$U3054$gsea,
+  CCLD = CCLD.GO$gsea
+)
+# Visualization of selected enrichment
+# 1.) TGF-B: "hsa04350" 
+tgfb.ranks = list(
+  U3017 = which(HGCC.GSEA$U3017$df$ID == "hsa04350"),
+  U3047 = which(HGCC.GSEA$U3047$df$ID == "hsa04350"),
+  U3054 = which(HGCC.GSEA$U3054$df$ID == "hsa04350"),
+  CCLD = which(CCLD.GSEA$df$ID == "hsa04350"))
+
+HGCC.enrichplot <- list()
+HGCC.enrichplot$TGFB$TOTAL_scores  <- do.call(rbind, c(
+  lapply(names(tgfb.ranks), function(i){
+    gsInfo(tgfb.ranks[[i]], object = GSEA.object[[i]]) %>% 
+      dplyr::mutate(source = i)}
+  )))
+
+HGCC.enrichplot$TGFB$TOTAL_scores <- HGCC.enrichplot$TGFB$TOTAL_scores %>% 
+  dplyr::mutate(
+    Description = gsub(x = HGCC.enrichplot$TGFB$TOTAL_scores$Description,
+                       pattern = "KEGG_", replacement =  ""),
+    source = factor(source, levels = names(GSEA.object)[c(col_order)]))
+
+HGCC.enrichplot$TGFB$TOTAL_table <- getEnrichmentTable(
+  .df = rbind(HGCC.GSEA$U3017$df[tgfb.ranks$U3017,] %>% 
+                dplyr::mutate(source = "U3017"),
+              HGCC.GSEA$U3047$df[tgfb.ranks$U3047,] %>% 
+                dplyr::mutate(source = "U3047"),
+              HGCC.GSEA$U3054$df[tgfb.ranks$U3054,] %>% 
+                dplyr::mutate(source = "U3054"),
+              CCLD.GSEA$df[tgfb.ranks$CCLD,] %>% 
+                dplyr::mutate(source = "CCLD")),
+  .order = c(col_order), .name = "source")
+
+(HGCC.enrichplot$TGFB$TOTAL_plot <- cowplot::plot_grid(
+  plotRunningScore(.df = HGCC.enrichplot$TGFB$TOTAL_scores, 
+                   .x = "x", .y = "runningScore", 
+                   .color = "source", .palette = c("U3017" = "pink",
+                                                   "U3047" = "salmon",
+                                                   "U3054" = "darkred", 
+                                                   "CCLD" = "steelblue"
+                   )),
+  plotGeneRank(.df = HGCC.enrichplot$TGFB$TOTAL_scores, 
+               .x = "x", .facet = "source~.",
+               .color = "source", .palette = c("U3017" = "pink",
+                                               "U3047" = "salmon",
+                                               "U3054" = "darkred",
+                                               "CCLD" = "steelblue"
+               )),
+  byrow = T, nrow = 2, ncol = 1, scale = .95, 
+  rel_heights = c(1.2,1), axis = "r",
+  margins = c(0.5, 0.5, 0.5, 0.5)))
+
+# Save as svg for publication
+ggsave(file.path(wd, results_dir, date, "plots", "TGFB_GSEA_enrichment_plot.svg"),
+       device = "svg", plot = HGCC.enrichplot$TGFB$TOTAL_plot,
+       bg = "white", width = 6, height = 4.45, units = "in")
+# Save as png for presentation
+ggsave(file.path(wd, results_dir, date, "plots", "TGFB_GSEA_enrichment_plot.png"),
+       device = "png", plot = HGCC.enrichplot$TGFB$TOTAL_plot,
+       bg = "white", ppi = 300, width = 6, height = 4.45, units = "in")
+
+# 2.) Epithelial-to-mesenchymal transition (EMT): "GO:0001837"
+emt.ranks = list(
+  U3017 = which(HGCC.GO$U3017$df$ID == "GO:0001837"),
+  U3047 = which(HGCC.GO$U3047$df$ID == "GO:0001837"),
+  U3054 = which(HGCC.GO$U3054$df$ID == "GO:0001837"),
+  CCLD = which(CCLD.GO$df$ID == "GO:0001837"))
+
+HGCC.enrichplot$EMT$TOTAL_scores  <- do.call(rbind, c(
+  lapply(names(emt.ranks), function(i){
+    gsInfo(emt.ranks[[i]], object = GO.object[[i]]) %>% 
+      dplyr::mutate(source = i)}
+  )))
+
+HGCC.enrichplot$EMT$TOTAL_scores <- HGCC.enrichplot$EMT$TOTAL_scores %>%
+  dplyr::mutate(
+    Description = gsub(x = HGCC.enrichplot$EMT$TOTAL_scores$Description,
+                       pattern = "GOBP_", replacement =  ""),
+    source = factor(source, levels = names(GO.object)[col_order]))
+
+HGCC.enrichplot$EMT$TOTAL_table <- getEnrichmentTable(
+  .df = rbind(HGCC.GO$U3017$df[emt.ranks$U3017,] %>% 
+                dplyr::mutate(source = "U3017"),
+              HGCC.GO$U3047$df[emt.ranks$U3047,] %>% 
+                dplyr::mutate(source = "U3047"),
+              HGCC.GO$U3054$df[emt.ranks$U3054,] %>% 
+                dplyr::mutate(source = "U3054"),
+              CCLD.GO$df[emt.ranks$CCLD,] %>% 
+                dplyr::mutate(source = "CCLD")),
+  .order = col_order, .name = "source")
+
+(HGCC.enrichplot$EMT$TOTAL_plot <- cowplot::plot_grid(
+  plotRunningScore(.df = HGCC.enrichplot$EMT$TOTAL_scores, 
+                   .x = "x", .y = "runningScore", 
+                   .color = "source", .palette = c("U3017" = "pink",
+                                                   "U3047" = "salmon",
+                                                   "U3054" = "darkred",
+                                                   "CCLD" = "steelblue")),
+  plotGeneRank(.df = HGCC.enrichplot$EMT$TOTAL_scores, 
+               .x = "x", .facet = "source~.",
+               .color = "source", .palette = c("U3017" = "pink",
+                                               "U3047" = "salmon",
+                                               "U3054" = "darkred",
+                                               "CCLD" = "steelblue")),
+  byrow = T, nrow = 2, ncol = 1, scale = .95, 
+  rel_heights = c(1.2,1), axis = "r",
+  margins = c(0.5, 0.5, 0.5, 0.5)))
+
+# Save as svg for publication
+ggsave(file.path(wd, results_dir, date, "plots", "EMT_GO_enrichment_plot.svg"),
+       device = "svg", plot = EMT.enrichplot$TOTAL_plot, 
+       bg = "white", width = 6, height = 4.45, units = "in")
+# Save as png for presentation
+ggsave(file.path(wd, results_dir, date, "plots", "EMT_GO_enrichment_plot.png"),
+       device = "png", plot = HGCC.enrichplot$EMT$TOTAL_plot, 
+       bg = "white", ppi = 300, width = 6, height = 4.45, units = "in")
+
+# 3.) Hypoxia: "M5891"
+hypoxia.ranks = list(
+  U3017 = which(HGCC.GO$U3017$df$ID == "M5891"),
+  U3047 = which(HGCC.GO$U3047$df$ID == "M5891"),
+  U3054 = which(HGCC.GO$U3054$df$ID == "M5891"),
+  CCLD = which(CCLD.GO$df$ID == "M5891"))
+
+HGCC.enrichplot$HYPOXIA$TOTAL_scores  <- do.call(rbind, c(
+  lapply(names(hypoxia.ranks)[1:4], function(i){
+    gsInfo(hypoxia.ranks[[i]], object = GO.object[[i]]) %>% 
+      dplyr::mutate(source = i)}
+  )))
+
+HGCC.enrichplot$HYPOXIA$TOTAL_scores <- HGCC.enrichplot$HYPOXIA$TOTAL_scores %>%
+  dplyr::mutate(
+    Description = gsub(x = HGCC.enrichplot$HYPOXIA$TOTAL_scores$Description,
+                       pattern = "GOBP_", replacement =  ""),
+    source = factor(source, levels = names(GO.object)[col_order]))
+
+HGCC.enrichplot$HYPOXIA$TOTAL_table <- getEnrichmentTable(
+  .df = rbind(HGCC.GO$U3017$df[hypoxia.ranks$U3017,] %>% 
+                dplyr::mutate(source = "U3017"),
+              HGCC.GO$U3047$df[hypoxia.ranks$U3047,] %>% 
+                dplyr::mutate(source = "U3047"),
+              HGCC.GO$U3054$df[hypoxia.ranks$U3054,] %>% 
+                dplyr::mutate(source = "U3054"),
+              CCLD.GO$df[hypoxia.ranks$CCLD,] %>% 
+                dplyr::mutate(source = "CCLD")),
+  .order = col_order, .name = "source")
+
+(HGCC.enrichplot$HYPOXIA$TOTAL_plot <- cowplot::plot_grid(
+  plotRunningScore(.df = HGCC.enrichplot$HYPOXIA$TOTAL_scores, 
+                   .x = "x", .y = "runningScore", 
+                   .color = "source", .palette = c("U3017" = "pink",
+                                                   "U3047" = "salmon",
+                                                   "U3054" = "darkred",
+                                                   "CCLD" = "steelblue")),
+  plotGeneRank(.df = HGCC.enrichplot$HYPOXIA$TOTAL_scores, 
+               .x = "x", .facet = "source~.",
+               .color = "source", .palette = c("U3017" = "pink",
+                                               "U3047" = "salmon",
+                                               "U3054" = "darkred",
+                                               "CCLD" = "steelblue")),
+  byrow = T, nrow = 2, ncol = 1, scale = .95, 
+  rel_heights = c(1.2,1), axis = "r",
+  margins = c(0.5, 0.5, 0.5, 0.5)))
+
+# Save as svg for publication
+ggsave(file.path(wd, results_dir, date, "plots", "Hypoxia_GO_enrichment_plot.svg"),
+       device = "svg", plot = Hypoxia.enrichplot$TOTAL_plot, 
+       bg = "white", width = 6, height = 4.45, units = "in")
+# Save as png for presentation
+ggsave(file.path(wd, results_dir, date, "plots", "Hypoxia_GO_enrichment_plot.png"),
+       device = "png", plot = HGCC.enrichplot$HYPOXIA$TOTAL_plot, 
+       bg = "white", ppi = 300, width = 6, height = 4.45, units = "in")
+
+# Vulcano visualization of the shared and selected enriched terms
+vulcano_pathways <- read.csv("../data/pathways-of-interest.txt", header = T,
+                              sep = "\t", stringsAsFactors = T)
+vulcano.object <- list(
+  U3017 = rbind(HGCC.GSEA$U3017$sig_df[,c("ID","Name", "NES", "p.adjust")],
+                HGCC.GO$U3017$sig_df[,c("ID","Name", "NES","p.adjust")]),
+  U3047 = rbind(HGCC.GSEA$U3047$sig_df[,c("ID","Name", "NES","p.adjust")],
+                HGCC.GO$U3047$sig_df[,c("ID","Name", "NES","p.adjust")]),
+  U3054 = rbind(HGCC.GSEA$U3054$sig_df[,c("ID","Name", "NES","p.adjust")],
+                HGCC.GO$U3054$sig_df[,c("ID","Name", "NES","p.adjust")]),
+  CCLD = rbind(CCLD.GSEA$sig_df[,c("ID","Name", "NES","p.adjust")],
+               CCLD.GO$sig_df[,c("ID","Name", "NES","p.adjust")]))
+
+# Cap very low p-values
+vulcano.object <- lapply(vulcano.object, function(x){
+  x %>% mutate(p.adjust = ifelse(p.adjust < 1e-35, 1e-35, p.adjust))
+})
+
+# Count in how many categories each term ID appears
+vulcano.ids <- bind_rows(
+  lapply(names(vulcano.object), function(name) {
+    vulcano.object[[name]] %>%
+      select(ID) %>%
+      distinct() %>%
+      mutate(category = name)
+  })
+)
+
+# Count appearances per ID
+vulcano.ids <- vulcano.ids %>%
+  dplyr::group_by(ID) %>% 
+  dplyr::summarise(count = n()) %>%
+  dplyr::filter(count >= 3) %>% 
+  dplyr::pull(ID)
+
+# Filter vulcano.object to retain only terms present in ≥3 categories
+vulcano.object <- lapply(vulcano.object, function(df) {
+  df %>% filter(ID %in% vulcano.ids)
+})
+
+# 1.) Extracellular matrix organization
+HGCC.vulcano <- list()
+(HGCC.vulcano$ECM <- lapply(vulcano.object, function(x){
+  plotClusters(.df = x, 
+               .pathways = interest_pathways %>% filter(Category == "ECM"))
+}))
+# Save individual plots
+sapply(names(HGCC.vulcano$ECM), function(x){
+  ggsave(file.path(wd, results_dir, date,"plots",
+                   paste(x,"ECM_GSEA_Vulcano_plot.svg",sep = "_")),
+         device = "svg", plot = HGCC.vulcano$ECM[[x]],
+         bg = "white", width = 12, height = 8, units = "in")
+})
+# Combine the ECM plots into a single figure
+(HGCC.vulcano$ECM$total <- cowplot::plot_grid(
+  HGCC.vulcano$ECM$U3054 +
+    theme(axis.title.x = element_blank()), NULL,
+  HGCC.vulcano$ECM$U3047 +
+    theme(axis.title = element_blank()), NULL,
+  HGCC.vulcano$ECM$U3017 +
+    theme(axis.title = element_blank()),
+  rel_widths = c(1, 0.15, 1, 0.15, 1),
+  byrow = T, nrow = 1, ncol = 5, scale = 1, 
+  margins = c(0.5, 0.5, 0.5, 0.5)))
+
+# Save the plot as svg for publication
+ggsave(file.path(wd, results_dir, date, "plots", "HGCC_combined_ECM_GSEA_Vulcano.svg"),
+       device = "svg", plot = HGCC.vulcano$ECM$total,
+       bg = "white", width = 15, height = 5, units = "in")
+# Save the plot as png for presentation
+ggsave(file.path(wd, results_dir, date, "plots", "HGCC_combined_ECM_GSEA_Vulcano.svg"),
+       device = "png", plot = HGCC.vulcano$ECM$total, 
+       bg = "white", dpi = 300, width = 15, height = 5, units = "in")
+
+# 2.) Hypoxia
+(HGCC.vulcano$HYPOXIA <- lapply(vulcano.object, function(x){
+  plotClusters(.df = x, 
+               .pathways = interest_pathways %>% filter(Category == "HYPOXIA"))
+}))
+# Save individual plots
+sapply(names(HGCC.vulcano$HYPOXIA), function(x){
+  ggsave(file.path(wd, results_dir,date, "plots",
+                   paste(x,"Hypoxia_GSEA_Vulcano_plot.svg",sep = "_")),
+         device = "svg", plot = HGCC.vulcano$HYPOXIA[[x]], 
+         bg = "white", width = 12, height = 8, units = "in")
+})
+# Combine the Hypoxia plots into a single figure
+(HGCC.vulcano$HYPOXIA$total <- cowplot::plot_grid(
+  HGCC.vulcano$HYPOXIA$U3054 +
+    theme(axis.title.x = element_blank()), NULL,
+  HGCC.vulcano$HYPOXIA$U3047 +
+    theme(axis.title = element_blank()), NULL,
+  HGCC.vulcano$HYPOXIA$U3017 +
+    theme(axis.title = element_blank()),
+  rel_widths = c(1, 0.15, 1, 0.15, 1),
+  byrow = T, nrow = 1, ncol = 5, scale = 1, 
+  margins = c(0.5, 0.5, 0.5, 0.5)))
+
+# Save the plot as svg for publication
+ggsave(file.path(wd, results_dir, date, "plots",
+                 "HGCC_combined_Hypoxia_GSEA_Vulcano_plot.svg"),
+       device = "svg", plot = HGCC.vulcano$HYPOXIA$total, 
+       bg = "white", width = 15, height = 5, units = "in")
+# Save the plot as png for presentation
+ggsave(file.path(wd, results_dir, date, "plots",
+                 "HGCC_combined_Hypoxia_GSEA_Vulcano_plot.png"),
+       device = "png", plot = HGCC.vulcano$HYPOXIA$total, 
+       bg = "white", dpi = 300, width = 15, height = 5, units = "in")
+
+# 3.) TGF-beta signaling pathway
+(HGCC.vulcano$TGFB <- lapply(vulcano.object, function(x){
+  plotClusters(.df = x, 
+               .pathways = interest_pathways %>% filter(Category == "TGFb"))
+}))
+# Save individual plots
+sapply(names(HGCC.vulcano$TGFB), function(x){
+  ggsave(file.path(wd, results_dir, date, "plots",
+                   paste(x,"TGFb_GSEA_Vulcano_plot.svg",sep = "_")),
+         device = "svg", plot = HGCC.vulcano$TGFB[[x]], 
+         bg = "white", width = 12, height = 8, units = "in")
+})
+# Combine the TGF-b plots into a single figure
+(HGCC.vulcano$TGFB$total <- cowplot::plot_grid(
+  HGCC.vulcano$TGFB$U3054 +
+    theme(axis.title.x = element_blank()), NULL,
+  HGCC.vulcano$TGFB$U3047 +
+    theme(axis.title = element_blank()), NULL,
+  HGCC.vulcano$TGFB$U3017 +
+    theme(axis.title = element_blank()),
+  rel_widths = c(1, 0.15, 1, 0.15, 1),
+  byrow = T, nrow = 1, ncol = 5, scale = 1, 
+  margins = c(0.5, 0.5, 0.5, 0.5)))
+
+# Save the plot as svg for publication
+ggsave(file.path(wd, results_dir, date, "plots",
+                 "HGCC_combined_TGFb_GSEA_Vulcano_plot.svg"),
+       device = "svg", plot = HGCC.vulcano$TGFB$total, 
+       bg = "white", width = 15, height = 5, units = "in")
+# Save the plot as png for presentation
+ggsave(file.path(wd, results_dir, date, "plots",
+                 "HGCC_combined_TGFb_GSEA_Vulcano_plot.png"),
+       device = "png", plot = HGCC.vulcano$TGFB$total, 
+       bg = "white", dpi = 300, width = 15, height = 5, units = "in")
+
+# remove intermediate objects
+rm(list = c("GO.object", "GSEA.object", "vulcano.ids","vulcano.object",
+            "tgfb.ranks","emt.ranks","hypoxia.ranks"))
+
+# ---------------------------------------------------------------------------- #
+# -   3.) U87 Chronic Acidosis AA vs NA & HOX vs NOX (Illumina BeadChip)     - #
+# ---------------------------------------------------------------------------- #
 results_dir <- "Results/U87"
 dir.create(file.path(wd, results_dir, date), recursive = T, showWarnings = FALSE)
 
@@ -399,7 +815,7 @@ U87.subset <- list()
 
 U87.subset$logexp <- U87.expr %>%
   dplyr::select(!ENTREZID) %>% 
-  dplyr::filter(SYMBOL %in% interest_genes & 
+  dplyr::filter(SYMBOL %in% interest_genes_U87 & 
                   PROBEID %in% U87.deg$`sel_pH647-control_sel`$ID.ID) 
 
 U87.subset$exp <- U87.subset$logexp %>% 
@@ -441,25 +857,253 @@ tmp <- limmaDEA(.data = U87.subset$logexp,
 tmp <- setNames(tmp, c("sel_pH64","acu_pH68",
                 "acu_pH64","hypoxia"))
 
-lapply(names(tmp), function(x){
+U87.subset$df <- lapply(names(tmp), function(x){
   return(tmp[[x]] %>% 
            dplyr::mutate(
              treatment = x,
              SYMBOL = ID.Symbol) %>% 
            dplyr::select(SYMBOL,treatment, logFC))
-}) %>% rbind.fill(.) %>% 
-  dplyr::full_join(U87.subset$df, ., by = c("SYMBOL", "treatment")) %>% 
-  dplyr::mutate(logFC = ifelse(is.na(logFC), 0, logFC)) -> U87.subset$df
-
-
+  }) %>% 
+  dplyr::bind_rows(.) %>% 
+  dplyr::full_join(U87.subset$df, ., by = c("SYMBOL", "treatment", "logFC")) %>% 
+  dplyr::mutate(logFC = ifelse(is.na(logFC), 0, logFC))
 
 dir.create(file.path(wd, "Results", "U87", date, "tables"), recursive = T, showWarnings = FALSE)
 openxlsx::write.xlsx(U87.subset, 
                      file.path(wd, "Results", "U87", date, "tables",
                                "U87_linear_scale_genes-of-interest_expression.xlsx"))
 
+# Combine enrichment results for CCLD and HGCC cell lines
+GSEA.object = list(
+  U87_sel = U87.GSEA$`sel_pH647-control_sel`$gsea,
+  U87_acu = U87.GSEA$`acu_pH64-control_acu`$gsea
+)
+GO.object = list(
+  U87_sel = U87.GO$`sel_pH647-control_sel`$gsea,
+  U87_acu = U87.GO$`acu_pH64-control_acu`$gsea
+)
+# Visualization of selected enrichment
+# 1.) TGF-B: "hsa04350" 
+tgfb.ranks = list(
+  "U87_sel" = which(U87.GSEA$`sel_pH647-control_sel`$df$ID == "hsa04350"),
+  "U87_acu" = which(U87.GSEA$`acu_pH64-control_acu`$df$ID == "hsa04350")
+  )
 
-# ---- 4.) PANC1 Chronic Acidosis AA vs NA (Clariom D Human Pico) Affymetrix ---- #
+U87.enrichplot <- list()
+U87.enrichplot$TGFB$TOTAL_scores <- do.call(rbind, c(
+  lapply(names(tgfb.ranks), function(i){
+    gsInfo(tgfb.ranks[[i]], object = GSEA.object[[i]]) %>% 
+      dplyr::mutate(source = i)}
+  )))
+U87.enrichplot$TGFB$TOTAL_scores <- U87.enrichplot$TGFB$TOTAL_scores %>% 
+  dplyr::mutate(
+    Description = gsub(x = U87.enrichplot$TGFB$TOTAL_scores$Description,
+                       pattern = "KEGG_", replacement =  ""),
+    source = factor(source, levels = names(GSEA.object)[c(2,1)]))
+
+U87.enrichplot$TGFB$TOTAL_table <- getEnrichmentTable(
+  .df = rbind(U87.GSEA$`sel_pH647-control_sel`$df[tgfb.ranks$U87_sel,] %>% 
+                dplyr::mutate(source = "U87_sel"),
+              U87.GSEA$`acu_pH64-control_acu`$df[tgfb.ranks$U87_acu,] %>% 
+                dplyr::mutate(source = "U87_acu")),
+  .order = c(2,1), .name = "source")
+
+(U87.enrichplot$TGFB$TOTAL_plot <- cowplot::plot_grid(
+  plotRunningScore(.df = U87.enrichplot$TGFB$TOTAL_scores, 
+                   .x = "x", .y = "runningScore", 
+                   .color = "source", .palette = c("U87_sel" = "#F00000",
+                                                   "U87_acu" = "salmon")),
+  plotGeneRank(.df = U87.enrichplot$TGFB$TOTAL_scores, 
+               .x = "x", .facet = "source~.",
+               .color = "source", .palette = c("U87_sel" = "#F00000",
+                                               "U87_acu" = "salmon")),
+  byrow = T, nrow = 2, ncol = 1, scale = .95, 
+  rel_heights = c(1.2,1), axis = "r",
+  margins = c(0.5, 0.5, 0.5, 0.5)))
+
+ggsave(file.path(wd, results_dir, date, "plots", "TGFB_GSEA_enrichment_plot.svg"),
+       device = "svg", plot = U87.enrichplot$TGFB$TOTAL_plot,
+       bg = "white", width = 6, height = 4.45, units = "in")
+
+# 2.) EMT
+emt.ranks = list(
+  U87_sel = which(U87.GO$`sel_pH647-control_sel`$df$ID == "GO:0001837"),
+  U87_acu = which(U87.GO$`acu_pH64-control_acu`$df$ID == "GO:0001837")
+  )
+
+U87.enrichplot$EMT$TOTAL_scores <- do.call(rbind, c(
+  lapply(names(emt.ranks), function(i){
+    gsInfo(emt.ranks[[i]], object = GO.object[[i]]) %>% 
+      dplyr::mutate(source = i)}
+  )))
+
+U87.enrichplot$EMT$TOTAL_scores <- U87.enrichplot$EMT$TOTAL_scores %>%
+  dplyr::mutate(
+    Description = gsub(x = U87.enrichplot$EMT$TOTAL_scores$Description,
+                       pattern = "GOBP_", replacement =  ""),
+    source = factor(source, levels = names(GO.object)[c(2,1)]))
+
+U87.enrichplot$EMT$TOTAL_table <- getEnrichmentTable(
+  .df = rbind(U87.GO$`sel_pH647-control_sel`$df[emt.ranks$U87_sel,] %>% 
+                dplyr::mutate(source = "U87_sel"),
+              U87.GO$`acu_pH64-control_acu`$df[emt.ranks$U87_acu,] %>% 
+                dplyr::mutate(source = "U87_acu")),
+  .order = c(2,1), .name = "source")
+
+(U87.enrichplot$EMT$TOTAL_plot <- cowplot::plot_grid(
+  plotRunningScore(.df = U87.enrichplot$EMT$TOTAL_scores, 
+                   .x = "x", .y = "runningScore", 
+                   .color = "source", .palette = c("U87_sel" = "#F00000",
+                                                   "U87_acu" = "salmon")),
+  plotGeneRank(.df = U87.enrichplot$EMT$TOTAL_scores, 
+               .x = "x", .facet = "source~.",
+               .color = "source", .palette = c("U87_sel" = "#F00000",
+                                               "U87_acu" = "salmon")),
+  byrow = T, nrow = 2, ncol = 1, scale = .95, 
+  rel_heights = c(1.2,1), axis = "r",
+  margins = c(0.5, 0.5, 0.5, 0.5)))
+
+# Save as svg for publication
+ggsave(file.path(wd, results_dir, date, "plots", "U87_EMT_GO_enrichment_plot.svg"),
+       device = "svg", plot = U87.enrichplot$EMT$TOTAL_plot,
+       bg = "white", width = 6, height = 4.45, units = "in")
+# Save as png for presentation
+ggsave(file.path(wd, results_dir, date, "plots", "U87_EMT_GO_enrichment_plot.png"),
+       device = "png", plot = U87.enrichplot$EMT$TOTAL_plot,
+       bg = "white", ppi = 300, width = 6, height = 4.45, units = "in")
+
+# 3.) Hypoxia
+hypoxia.ranks = list(
+  U87_sel = which(U87.GO$`sel_pH647-control_sel`$df$ID == "M5891"),
+  U87_acu = which(U87.GO$`acu_pH64-control_acu`$df$ID == "M5891")
+  )
+
+U87.enrichplot$HYPOXIA$TOTAL_scores <- do.call(rbind, c(
+  lapply(names(hypoxia.ranks), function(i){
+    gsInfo(hypoxia.ranks[[i]], object = GO.object[[i]]) %>% 
+      dplyr::mutate(source = i)}
+  )))
+
+U87.enrichplot$HYPOXIA$TOTAL_scores <- U87.enrichplot$HYPOXIA$TOTAL_scores %>%
+  dplyr::mutate(
+    Description = gsub(x = U87.enrichplot$HYPOXIA$TOTAL_scores$Description,
+                       pattern = "GOBP_", replacement =  ""),
+    source = factor(source, levels = names(GO.object)[c(2,1)]))
+
+U87.enrichplot$HYPOXIA$TOTAL_table <- getEnrichmentTable(
+  .df = rbind(U87.GO$`sel_pH647-control_sel`$df[hypoxia.ranks$U87_sel,] %>% 
+                dplyr::mutate(source = "U87_CA"),
+              U87.GO$`acu_pH64-control_acu`$df[hypoxia.ranks$U87_acu,] %>% 
+                dplyr::mutate(source = "U87_AA")),
+  .order = c(2,1), .name = "source")
+
+(U87.enrichplot$HYPOXIA$TOTAL_plot <- cowplot::plot_grid(
+  plotRunningScore(.df = U87.enrichplot$HYPOXIA$TOTAL_scores, 
+                   .x = "x", .y = "runningScore", 
+                   .color = "source", .palette = c("U87_sel" = "#F00000",
+                                                   "U87_acu" = "salmon")),
+  plotGeneRank(.df = U87.enrichplot$HYPOXIA$TOTAL_scores, 
+               .x = "x", .facet = "source~.",
+               .color = "source", .palette = c("U87_sel" = "#F00000",
+                                               "U87_acu" = "salmon")),
+  byrow = T, nrow = 2, ncol = 1, scale = .95, 
+  rel_heights = c(1.2,1), axis = "r",
+  margins = c(0.5, 0.5, 0.5, 0.5)))
+
+# Save as svg for publication
+ggsave(file.path(wd, results_dir, date, "plots", "U87_Hypoxia_GO_enrichment_plot.svg"),
+       device = "svg", plot = Hypoxia.enrichplot$U87_plot, 
+       bg = "white", width = 6, height = 4.45, units = "in")
+# Save as png for presentation
+ggsave(file.path(wd, results_dir, date, "plots", "U87_Hypoxia_GO_enrichment_plot.png"),
+       device = "png", plot = U87.enrichplot$HYPOXIA$TOTAL_plot,
+       bg = "white", ppi = 300, width = 6, height = 4.45, units = "in")
+
+# Vulcano visualization of the shared terms and pathways
+U87.vulcano.object <- list(
+  U87_CA64 = rbind(U87.GSEA$`sel_pH647-control_sel`$sig_df[,c("ID","Name", "NES","p.adjust")],
+                   U87.GO$`sel_pH647-control_sel`$sig_df[,c("ID","Name", "NES","p.adjust")]),
+  U87_AA64 = rbind(U87.GSEA$`acu_pH64-control_acu`$sig_df[,c("ID","Name", "NES","p.adjust")],
+                   U87.GO$`acu_pH64-control_acu`$sig_df[,c("ID","Name", "NES","p.adjust")]),
+  U87_AA68 = rbind(U87.GSEA$`acu_pH68-control_acu`$sig_df[,c("ID","Name", "NES","p.adjust")],
+                   U87.GO$`acu_pH68-control_acu`$sig_df[,c("ID","Name", "NES","p.adjust")]),
+  U87_Hypoxia = rbind(U87.GSEA$`hypoxia-control_nox`$sig_df[,c("ID","Name", "NES","p.adjust")],
+                      U87.GO$`hypoxia-control_nox`$sig_df[,c("ID","Name", "NES","p.adjust")])
+)
+# Cap very low p-values
+U87.vulcano.object <- lapply(U87.vulcano.object, function(x){
+  x %>% mutate(p.adjust = ifelse(p.adjust < 1e-35, 1e-35, p.adjust))
+})
+
+# Count in how many categories each term ID appears
+U87.vulcano.ids <- bind_rows(
+  lapply(names(U87.vulcano.object), function(name) {
+    U87.vulcano.object[[name]] %>%
+      select(ID) %>%
+      distinct() %>%
+      mutate(category = name)
+  })
+)
+
+# Count appearances per ID
+U87.vulcano.ids <- U87.vulcano.ids %>%
+  dplyr::group_by(ID) %>% 
+  dplyr::summarise(count = n()) %>%
+  dplyr::filter(count >= 3) %>% 
+  dplyr::pull(ID)
+
+# Filter vulcano.object to retain only terms present in ≥3 categories
+U87.vulcano.object <- lapply(U87.vulcano.object, function(df) {
+  df %>% filter(ID %in% U87.vulcano.ids)
+})
+
+# 1.) Extracellular matrix organization
+U87.vulcano <- list()
+(U87.vulcano$ECM <- lapply(U87.vulcano.object, function(x){
+  plotClusters(.df = x, 
+               .pathways = interest_pathways %>% filter(Category == "ECM"))
+}))
+# Save individual plots
+sapply(names(U87.vulcano$ECM), function(x){
+  ggsave(file.path(wd, results_dir,date,"plots",
+                   paste(x,"ECM_GSEA_Vulcano_plot.svg",sep = "_")),
+         device = "svg", plot = U87.vulcano$ECM[[x]],
+         bg = "white", width = 12, height = 8,units = "in")
+})
+
+# 2.) Hypoxia
+(U87.vulcano$HYPOXIA <- lapply(U87.vulcano.object, function(x){
+  plotClusters(.df = x, 
+               .pathways = interest_pathways %>% filter(Category == "HYPOXIA"))
+}))
+# Save individual plots
+sapply(names(U87.vulcano$HYPOXIA), function(x){
+  ggsave(file.path(wd, results_dir,date,"plots",
+                   paste(x,"Hypoxia_GSEA_Vulcano_plot.svg",sep = "_")),
+         device = "svg", plot = U87.vulcano$HYPOXIA[[x]],
+         bg = "white", width = 12, height = 8, units = "in")
+})
+
+# 3.) TGF-beta signaling pathway
+(U87.vulcano$TGFB <- lapply(U87.vulcano.object, function(x){
+  plotClusters(.df = x, 
+               .pathways = interest_pathways %>% filter(Category == "TGFb"))
+}))
+# Save individual plots
+sapply(names(U87.vulcano$TGFB), function(x){
+  ggsave(file.path(wd, results_dir,date,"plots",
+                   paste(x,"TGFb_GSEA_Vulcano_plot.svg",sep = "_")),
+         device = "svg", plot = U87.vulcano$TGFB[[x]],
+         bg = "white", width = 12, height = 8,units = "in")
+})
+
+# remove intermediate objects
+rm(list = c("GO.object", "GSEA.object", "U87.vulcano.ids","U87.vulcano.object",
+            "tgfb.ranks","emt.ranks","hypoxia.ranks"))
+
+# ---------------------------------------------------------------------------- #
+# -   4.) PANC1 Chronic Acidosis AA vs NA (Clariom D Human Pico) Affymetrix  - #
+# ---------------------------------------------------------------------------- #
 results_dir <- "Results/PANC1"
 dir.create(file.path(wd, results_dir, date), recursive = T, showWarnings = FALSE)
 
@@ -550,32 +1194,15 @@ tmp <- limmaDEA(.data = PANC1.subset$logexp,
                             "PANC1_AA", "PANC1_AA", "PANC1_AA"),
                 .contrast = c("PANC1_AA - PANC1_NA"))
 
-tmp[[1]] %>% 
+PANC1.subset$df <- tmp[[1]] %>% 
   dplyr::mutate(
     SYMBOL = ID.Symbol) %>% 
   dplyr::select(SYMBOL, logFC) %>% 
-  rbind.fill(.) %>% 
+  dplyr::bind_rows(.) %>% 
   dplyr::full_join(PANC1.subset$df, ., by = c("SYMBOL")) %>% 
-  dplyr::mutate(logFC = ifelse(is.na(logFC), 0, logFC)) -> PANC1.subset$df
-
-
+  dplyr::mutate(logFC = ifelse(is.na(logFC), 0, logFC))
 
 dir.create(file.path(wd, "Results", "PANC1", date, "tables"), recursive = T, showWarnings = FALSE)
 openxlsx::write.xlsx(PANC1.subset, 
                      file.path(wd, "Results", "PANC1", date, "tables",
                                "PANC1_linear_scale_genes-of-interest_expression.xlsx"))
-
-# 
-# tmp <- merge.rec(list(CCLD.df[,c(1,2,4)] %>% dplyr::filter(Symbol %in% interest_genes$gene_symbol),
-#                HGCC.deg$U3017[,c(2,4,8,10)] %>% dplyr::filter(Symbol %in% interest_genes$gene_symbol),
-#                HGCC.deg$U3047[,c(2,4,8,10)] %>% dplyr::filter(Symbol %in% interest_genes$gene_symbol),
-#                HGCC.deg$U3054[,c(2,4,8,10)] %>% dplyr::filter(Symbol %in% interest_genes$gene_symbol)),
-#                #U87.deg$`sel_pH647-control_sel`[,c(2,10)] %>% dplyr::filter(Symbol %in% interest_genes$Gene.name),
-#                #PANC1.deg[,c(2,10)] %>% dplyr::filter(Symbol %in% interest_genes$Gene.name)),
-#           by = "Symbol", all = T, suffixes = c("",""))
-# tmp <- setNames(tmp, c("Symbol","log2FC.CCLD","regulation.CCLD",
-#                        "log2FC.U3017","padj.U3017","regulation.U3017",
-#                        "log2FC.U3047","padj.U3047","regulation.U3047",
-#                        "log2FC.U3054","padj.U3054","regulation.U3054"))
-# interest_genes <- merge(interest_genes, tmp, by.x = "gene_symbol", by.y = "Symbol")                 
-# write.xlsx(interest_genes, "Results/selected-5-category-genes.xlsx")

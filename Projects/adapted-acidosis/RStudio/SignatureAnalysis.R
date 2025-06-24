@@ -1,3 +1,6 @@
+################################################################################
+# Created: 2024 05 24 ; Last Modified: 2025 06 24 ; KGO & MH                   #
+################################################################################
 lipid_droplet_genes <- read.csv("data/gene-signature-new.txt", header = T,
                            sep = "\t", stringsAsFactors = T)
 subtype_hallmarks <- msigdbr_df %>% 
@@ -9,9 +12,11 @@ subtype_hallmarks <- msigdbr_df %>%
 subtype_hallmarks <- lapply(subtype_hallmarks, function(x) {
   return(names(x))
 })
-################ IvyGap downloaded from GlioVis on 2024 05 24
-# RNA-seq. The normalized count reads from the pre-processed data (sequence allignment and transcript abundance estimation) were log2 transformed after adding a 0.5 pseudocount (to avoid infinite value upon log transformation).
-# Load Ivy Gap data
+
+################################################################################
+#                       IvyGap downloaded from GlioVis                         #
+################################################################################
+# 1.) Load Ivy Gap data
 IvyGap <- read.table("./data/raw/IvyGap/2025-01-23_Ivy_GAP_expression.csv", header=TRUE,
                      sep = ",", dec = ".")
 IvyGap.genes <- read.table("./data/raw/IvyGap/2025-01-23_Ivy_GAP_genes.csv", header=TRUE,
@@ -26,21 +31,18 @@ clin2 <- read.table("./data/raw/IvyGap/2025-01-23_Ivy_GAP_pheno.csv", header=TRU
                     sep = ",", dec = ".")
 clin_IvyGap <- merge(clin2, clin1, by.x="rna_well_id", by.y="Sample")
 rm(clin1,clin2)
-# Get only primary tumors and samples that have location stated. Ivy gapd does not have IDH status information
-# Out of 270 samples, 122 are primary GBM with Histology status
-Prim_IG <- clin_IvyGap[which(clin_IvyGap$Recurrence=="Primary" & !is.na(clin_IvyGap$Histology)),]
+# 2.) Preprocess Ivy Gap data
+Prim_IG <- clin_IvyGap[which(clin_IvyGap$Recurrence=="Primary" & # filter for primary GBM
+                               !is.na(clin_IvyGap$Histology)),] # no IDH information
 sel_IvyGap <- IvyGap[,which(colnames(IvyGap) %in% Prim_IG$rna_well_id)]
+
+# Calculate lipid droplet gene signature
 Ivygap.score <- hack_sig(as.matrix(sel_IvyGap),
                          list(as.character(lipid_droplet_genes$SYMBOL)),
                          method = "zscore")
 Ivygap.score <- setNames(as.data.frame(Ivygap.score), c("sample","zscore"))
 Ivygap.score <- merge(Ivygap.score, Prim_IG, by.x="sample", by.y="rna_well_id")
 Ivygap.score <- Ivygap.score %>%
-  # dplyr::rowwise(.) %>%
-  # dplyr::mutate(
-  #   across(Subtype.svm:Subtype_Verhaak_2010, ~gsub(x=.x,pattern="Proneural",replacement="Neural"))
-  # ) %>%
-  # dplyr::ungroup(.) %>%
   dplyr::select(sample, zscore, Age, survival, status, Histology,
                 Subtype.svm:Subtype_Verhaak_2010, MGMT_status, EGFR_amplification) %>%
   dplyr::mutate(
@@ -49,6 +51,7 @@ Ivygap.score <- Ivygap.score %>%
     MGMT_status = as.factor(MGMT_status),
     EGFR_amplification = as.factor(EGFR_amplification)
   )
+# Calculate best fit subtype
 Ivygap.score$primary_subtype = apply(as.matrix(Ivygap.score[,7:10]), 1,function(x) unlist(Mode(as.factor(x)))[1])
 Ivygap.type <- hack_sig(as.matrix(sel_IvyGap),
                         subtype_hallmarks,
@@ -63,6 +66,8 @@ Ivygap.score <- Ivygap.score %>%
     primary_subtype = factor(primary_subtype, levels = c("Mesenchymal","Classical","Proneural","Neural")),
     gsea_subtype = factor(gsea_subtype, levels = c("Mesenchymal","Classical","Proneural","Neural"))
   )
+
+# Plot histology
 (Ivygap.plot$histology <- score_plot(.score = Ivygap.score, .formula = "zscore ~ Histology",
                                      .ref_group = "Pseudopalisading cells", .x = "Histology",
                                      .y = "zscore", .title = "Lipid droplet gene signature"))
@@ -74,6 +79,8 @@ ggsave(file.path("Results","signature", "IvyGap_signature_histology_log0_new_sig
 ggsave(file.path("Results", "signature","IvyGap_signature_histology_log0_new_signature.svg"), Ivygap.plot$histology$plot,
                  device = "svg", width = 6, height = 4, units = "in")
 
+# 3.) Create visualization
+# Plot subtype
 (Ivygap.plot$subtype <- score_plot(.score = Ivygap.score, .formula = "zscore ~ gsea_subtype",
                                   .ref_group = "Mesenchymal", .x = "gsea_subtype",
                                   .y = "zscore", .title = "Lipid droplet gene signature",
@@ -85,22 +92,27 @@ ggsave(file.path("Results", "signature","IvyGap_signature_subtype_log0_new_signa
 # Save subtype plot as svg
 ggsave(file.path("Results", "signature","IvyGap_signature_subtype_log0_new_signature.svg"), Ivygap.plot$subtype$plot,
                  device = "svg", width = 6, height = 4, units = "in")
+
+# Save histology and subtype statistics to excel
 write.xlsx(list("Histology" = Ivygap.plot$histology$stat.test,
                 "Subtype" = CGGA.plot$subtype$stat.test),
            file.path("Results", "signature","IvyGap_histology+subtype_wilcox_test_new_signature.xlsx"),
            colNames=TRUE, rowNames=F)
 
+# remove objects
 rm(list = c("IvyGap", "clin_IvyGap", "Prim_IG", "sel_IvyGap", "Ivygap.type"))
-# ---------------------------------------------------------------------------- #
-################ IvyGap downloaded from GlioVis on 2025 02 20
-# RNA-seq. The normalized count reads from the pre-processed data (sequence allignment and transcript abundance estimation) were log2 transformed after adding a 0.5 pseudocount (to avoid infinite value upon log transformation).
-# Load Ivy Gap data
+
+################################################################################
+#                       TCGA download primary GBM                              #
+################################################################################
+# 1.) Load TCGA data
 data_dir <- "./data/raw/TCGA_GBM/"
 TCGA.expression <- read.table(file = file.path(data_dir, "TCGA_GBM_expression.txt"),
                               header = T, sep = "\t")
 TCGA.clinical <- read.table(file = file.path(data_dir, "TCGA_GBM_pheno.txt"),
                             header = T, sep = "\t")
 
+# 2.) Process TCGA data
 # exclude samples with missing gene expression data
 row.names(TCGA.expression) <- TCGA.expression$Sample
 TCGA.expression <- as.data.frame(t(TCGA.expression[,-1])) %>% 
@@ -124,6 +136,7 @@ list_of_datasets <- list("PrimaryGBM_gexp" = sel_TCGA.expression, "PrimaryGBM_cl
                          "FullDataset_gexp" = TCGA.expression, "FullDataset_clinical" = TCGA.clinical)
 write.xlsx(list_of_datasets, file = "./data/processed/TCGA.xlsx", colNames=TRUE, rowNames=TRUE)
 
+# Calculate lipid droplet gene signature
 TCGA.score <- hack_sig(as.matrix(sel_TCGA.expression),
                         list(as.character(lipid_droplet_genes$SYMBOL)), 
                         method = "zscore")
@@ -132,6 +145,7 @@ TCGA.score <- setNames(as.data.frame(TCGA.score), c("sample","zscore"))
 
 TCGA.score <- merge(TCGA.score, TCGA.primary, by.x="sample", by.y="Sample")
 
+# Calculate best fit subtype
 TCGA.score <- TCGA.score %>% 
   dplyr::select(sample, zscore, Subtype_Verhaak_2010) %>% 
   dplyr::rename(primary_subtype = Subtype_Verhaak_2010)
@@ -154,6 +168,8 @@ TCGA.score <- TCGA.score %>%
     gsea_subtype = factor(gsea_subtype, levels = c("Mesenchymal","Classical","Proneural","Neural"))
   )
 
+# 3.) Create visualization
+# Plot subtype
 TCGA.plot <- list()
 (TCGA.plot$subtype <- score_plot(.score = TCGA.score, .formula = "zscore ~ gsea_subtype",
                                   .ref_group = "Mesenchymal", .x = "gsea_subtype",
@@ -174,10 +190,11 @@ write.xlsx(list("Subtype" = TCGA.plot$subtype$stat.test),
 rm(list = c("TCGA.expression", "TCGA.clinical", "sel_TCGA.expression", 
             "TCGA.primary", "TCGA.type"))
 
-# ---------------------------------------------------------------------------- #
-################ CGGA downloaded from GlioVis on 2025 02 20
-# RNA-seq. The normalized count reads from the pre-processed data (sequence allignment and transcript abundance estimation) were log2 transformed after adding a 0.5 pseudocount (to avoid infinite value upon log transformation).
-# Load CGGA data
+
+################################################################################
+#                       TCGA download primary GBM                              #
+################################################################################
+# 1.) Load CGGA data
 data_dir <- "./data/raw/CGGA/"
 CGGA.expression <- read.table(file = file.path(data_dir, "CGGA_expression.txt"),
                               header = T, sep = "\t")
@@ -191,6 +208,8 @@ CGGA.primary <- CGGA.clinical[which(CGGA.clinical$Recurrence=="Primary"
 row.names(CGGA.expression) <- CGGA.expression$gene_name
 CGGA.expression <- CGGA.expression[,-1]
 
+# 2.) Process CGGA data
+# Add pseudo-counts to avoid log2(0)
 CGGA.expression <- t(apply(CGGA.expression, 1, function(x) log2(x) + 1))
 CGGA.expression <- as.data.frame(CGGA.expression) %>% 
   dplyr::select(which(colnames(CGGA.expression) %in% CGGA.primary$Sample)) %>% 
@@ -205,6 +224,7 @@ list_of_datasets <- list("PrimaryGBM_gexp" = CGGA.expression, "PrimaryGBM_clinic
 
 write.xlsx(list_of_datasets, file = "./data/processed/CGGA.xlsx", colNames=TRUE, rowNames=TRUE)
 
+# Calculate lipid droplet gene signature
 CGGA.score <- hack_sig(as.matrix(CGGA.expression),
                         list(as.character(lipid_droplet_genes$SYMBOL)), 
                         method = "zscore")
@@ -213,6 +233,7 @@ CGGA.score <- setNames(as.data.frame(CGGA.score), c("sample","zscore"))
 
 CGGA.score <- merge(CGGA.score, CGGA.primary, by.x="sample", by.y="Sample")
 
+# Calculate best fit subtype
 CGGA.score <- CGGA.score %>% 
   dplyr::select(sample, zscore, Subtype) %>% 
   dplyr::rename(primary_subtype = Subtype)
@@ -234,6 +255,8 @@ CGGA.score <- CGGA.score %>%
     gsea_subtype = factor(gsea_subtype, levels = c("Mesenchymal","Classical","Proneural","Neural"))
   )
 
+# 3.) Create visualization
+# Plot subtype
 CGGA.plot <- list()
 (CGGA.plot$subtype <- score_plot(.score = CGGA.score, .formula = "zscore ~ gsea_subtype",
                                   .ref_group = "Mesenchymal", .x = "gsea_subtype",
