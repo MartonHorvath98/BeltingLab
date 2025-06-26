@@ -5,30 +5,10 @@
   - [1.2. Directory tree](#12-directory-tree)
 - [2. Bioinformatical pipeline](#2-bioinformatical-pipeline)
   - [2.1. Data preprocessing \& differential gene expression (DGE) analysis](#21-data-preprocessing--differential-gene-expression-dge-analysis)
-      - [Overview:](#overview)
-      - [Main steps:](#main-steps)
-      - [Input data:](#input-data)
-      - [Output:](#output)
   - [2.2. DGE visualization and pathway analysis](#22-dge-visualization-and-pathway-analysis)
-      - [Overview:](#overview-1)
-      - [Main Steps:](#main-steps-1)
-      - [Input data:](#input-data-1)
-      - [Output:](#output-1)
   - [2.3. Addition GSEA visualization](#23-addition-gsea-visualization)
-      - [Overview:](#overview-2)
-      - [Main Steps:](#main-steps-2)
-      - [Input data:](#input-data-2)
-      - [Output:](#output-2)
   - [2.4. GSEA clustering and network analysis](#24-gsea-clustering-and-network-analysis)
-      - [Overview:](#overview-3)
-      - [Main Steps:](#main-steps-3)
-      - [Input data:](#input-data-3)
-      - [Output:](#output-3)
   - [2.5. Gene signature analysis](#25-gene-signature-analysis)
-      - [Overview:](#overview-4)
-      - [Main Steps:](#main-steps-4)
-      - [Inputs:](#inputs)
-      - [Outputs:](#outputs)
 
 ## 1.1. Input data
 
@@ -196,7 +176,7 @@ Requirements:
 ## 2.5. Gene signature analysis
 
 #### Overview:
-The [`SignatureAnalysis.R`] script performs gene signature analysis for lipid droplet genes across multiple glioblastoma datasets (IvyGap, TCGA, CGGA). It calculates gene signature scores using `zscore`, assigns 
+The [`SignatureAnalysis.R`](RStudio/SignatureAnalysis.R) script performs gene signature analysis for lipid droplet genes across multiple glioblastoma datasets (IvyGap, TCGA, CGGA). It calculates gene signature scores using `zscore`, assigns 
 molecular subtypes using `ssgsea`, and generates visualizations and statistical summaries.
 
 The cohorts used for this segment of the project include RNA-seq data from all three datasets. In the case of Ivygap and CGGA the normalized count reads from the pre-processed data (sequence alignment and transcript 
