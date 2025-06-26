@@ -6,14 +6,27 @@
 # Set working directory
 wd <- getwd()
 # Load packages
-source(file = file.path(wd, "packages.R"))
+if (file.exists(file.path(wd, "packages.R"))) {
+  source(file = file.path(wd, "packages.R"))
+} else {
+  stop("Required file 'packages.R' not found in the working directory.")
+}
 # Source data processing functions
-source(file = file.path(wd, "functions.R"))
+if (file.exists(file.path(wd, "functions.R"))) {
+  source(file = file.path(wd, "functions.R"))
+} else {
+  stop("Required file 'functions.R' not found in the working directory.")
+}
+
+# Export session info and save to file
+sink(file = "../sessionInfo.txt")
+devtools::session_info()
+sink()
 
 # ---------------------------------------------------------------------------- #
 # -   Svenja's CC +LD and CC no LD (Clariom D Human Pico) Affymetrix         - #
 # ---------------------------------------------------------------------------- #
-data_dir <- "./data/raw/ccLDvsccNoLD_Svenja_affy/"
+data_dir <- "../data/raw/Affymetrix/CCLD/"
 CCLD.dat <- read.celfiles(list.celfiles(data_dir, full.names = TRUE))
 
 # Transcript filtering
@@ -26,20 +39,20 @@ CCLD.expr <- removeDuplicates(.data = CCLD.expr,.column = "log2FoldChange",
                               .symbol = "SYMBOL")
 
 ####### Check how many up and down- regulated genes
-length(which(CCLD.expr$log2FoldChange >=0.5)) # 6066
+length(which(CCLD.expr$log2FoldChange >=0.5)) # 6082
 length(which(CCLD.expr$log2FoldChange <=(-0.5))) # 897
 
 # save RData
 dir.create("./RData", showWarnings = FALSE)
-save(CCLD.expr, file = "./RData/CC_LD_noLD_processedData.RData")
+save(CCLD.expr, file = "./RData/CCLD_processedData.RData")
 # save file
-dir.create("./data/processed", showWarnings = FALSE)
-write.xlsx(CCLD.expr, file = "./data/processed/CC_LD_noLD_processedData.xlsx")
+dir.create("../data/processed/expression_matrices/", showWarnings = FALSE)
+write.xlsx(CCLD.expr, file = "../data/processed/expression_matrices/CCLD_processedData.xlsx")
 
 # ---------------------------------------------------------------------------- #
 # -      Hugo's Primary cells 2D vs 3D (Clariom D Human Pico) Affymetrix     - #
 # ---------------------------------------------------------------------------- #
-data_dir <- "./data/raw/2Dvs3D_Hugo_primaryCells/"
+data_dir <- "../data/raw/Affymetrix/HGCC/"
 HGCC.dat <- read.celfiles(list.celfiles(data_dir, full.names = TRUE))
 
 # Transcript filtering
@@ -47,15 +60,15 @@ HGCC.expr <- normalizeTranscript(HGCC.dat, clariomdhumantranscriptcluster.db)
 
 # Compare cell lines
 HGCC.deg <- limmaDEA(.data = HGCC.expr,
-                     .design = c("U3017_2D", "U3017_2D","U3017_2D",
+                     .design = c("U3017_2D", "U3017_2D", "U3017_2D",
                                  "U3017_3D", "U3017_3D", "U3017_3D",
-                                 "U3047_2D", "U3047_2D","U3047_2D",
-                                 "U3047_3D","U3047_3D","U3047_3D",
+                                 "U3047_2D", "U3047_2D", "U3047_2D",
+                                 "U3047_3D", "U3047_3D", "U3047_3D",
                                  "U3054_2D", "U3054_2D", "U3054_2D",
-                                 "U3054_3D", "U3054_3D","U3054_3D"),
-                     .contrast = c("tU3017_3D-tU3017_2D",
-                                   "tU3047_3D-tU3047_2D",
-                                   "tU3054_3D-tU3054_2D")) 
+                                 "U3054_3D", "U3054_3D", "U3054_3D"),
+                     .contrast = c("U3017_3D-U3017_2D",
+                                   "U3047_3D-U3047_2D",
+                                   "U3054_3D-U3054_2D")) 
 
 names(HGCC.deg) <- c("U3017", "U3047", "U3054")
 # Compare global
@@ -64,7 +77,8 @@ HGCC.deg <- c(HGCC.deg,
                                   .design = c("2D","2D","2D","3D","3D","3D",
                                               "2D","2D","2D","3D","3D","3D",
                                               "2D","2D","2D","3D","3D","3D"),
-                                  .contrast = c("t3D-t2D"))) 
+                                  .contrast = c("X3D - X2D")))
+
 # Remove duplicate IDs
 HGCC.deg <- lapply(HGCC.deg, removeDuplicates, .column = "t", .symbol = "ID.Symbol")
 
@@ -86,16 +100,16 @@ length(which(HGCC.df$log2FoldChange.global >= 0.5)) # 2539
 length(which(HGCC.df$log2FoldChange.global <= (-0.5))) # 1831
 
 # Save RData
-save(HGCC.deg, file = "./RData/HGCC_2D3D_processedData.RData")
+save(HGCC.expr, HGCC.deg, file = "./RData/HGCC_processedData.RData")
 # Save file
 sapply(names(HGCC.deg), function(x){
-  write.xlsx(HGCC.deg[[x]], file = paste0("./data/processed/HGCC_",x,"_2D3D_processedData.xlsx"))
+  write.xlsx(HGCC.deg[[x]], file = paste0("../data/processed/expression_matrices/HGCC_",x,"_processedData.xlsx"))
 })
 
 # ---------------------------------------------------------------------------- #
 # -     U87 Chronic Acidosis AA vs NA & HOX vs NOX (Illumina BeadChip)       - #
 # ---------------------------------------------------------------------------- #
-data_dir <- "./data/raw/U87_AAvsNA"
+data_dir <- "../data/raw/Illumina/U87/"
 U87.dat <- read.ilmn(files=file.path(data_dir, "Sample_Probe_Summary.txt"),
                      ctrlfiles=file.path(data_dir, "Control_Probe_Summary.txt"))
 
@@ -156,28 +170,26 @@ length(which(U87.deg$`sel_pH647-control_sel`$logFC >= 0.5)) # 1876
 length(which(U87.deg$`sel_pH647-control_sel`$logFC <= (-0.5))) # 1866
 
 # Save RData
-save(U87.deg, file = "./RData/U87_AAvsNA_processedData.RData")
+save(U87.expr, U87.deg, file = "./RData/U87_processedData.RData")
 # Save file
 sapply(names(U87.deg), function(x){
-  write.xlsx(U87.deg[[x]], file = paste0("./data/processed/U87_",x,"_processedData.xlsx"))
+  write.xlsx(U87.deg[[x]], file = paste0("../data/processed/expression_matrices/U87_",x,"_processedData.xlsx"))
 })
-
 
 # ---------------------------------------------------------------------------- #
 # -   PANC1 Chronic Acidosis AA vs NA (Clariom D Human Pico) Affymetrix      - #
 # ---------------------------------------------------------------------------- #
-data_dir <- "./data/raw/PANC1_BEA21P006_affy/"
+data_dir <- "../data/raw/Affymetrix/PANC1/"
 PANC1.dat <- read.celfiles(list.celfiles(data_dir, full.names = TRUE))
 
 # Transcript filtering
 PANC1.expr <- normalizeTranscript(PANC1.dat, clariomdhumantranscriptcluster.db)
 
 # Perform DEG analysis
-# Compare cell lines
 PANC1.deg <- limmaDEA(.data = PANC1.expr,
                      .design = c("PANC1_NA", "PANC1_NA","PANC1_NA",
                                  "PANC1_AA", "PANC1_AA", "PANC1_AA"),
-                     .contrast = c("tPANC1_AA - tPANC1_NA")) 
+                     .contrast = c("PANC1_AA - PANC1_NA"))
 
 PANC1.deg <- removeDuplicates(PANC1.deg[[1]], .column = "t", .symbol = "ID.Symbol")
 
@@ -186,12 +198,22 @@ length(which(PANC1.deg$logFC >= 0.5)) # 1038
 length(which(PANC1.deg$logFC <= (-0.5))) # 659
 
 # Save RData
-save(PANC1.deg, file = "./RData/PANC1.deg_AAvsNA_processedData.RData")
+save(PANC1.expr, PANC1.deg, file = "./RData/PANC1_processedData.RData")
 # Save file
-write.xlsx(PANC1.deg, file = paste0("./data/processed/PANC1_AAvsNA_processedData.xlsx"))
+write.xlsx(PANC1.deg, file = paste0("../data/processed/expression_matrices/PANC1_processedData.xlsx"))
 
 
-
+################################################################################
+# Clean up the environment                                                     #
+################################################################################
+# Close any open connections
+if (exists("dbCon") && dbIsValid(dbCon)) {
+  dbDisconnect(dbCon)
+}
+# Run garbage collection to free up memory
+gc() 
+# Clear the environment
+rm(list = ls()) 
 
 
 

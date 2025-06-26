@@ -1,9 +1,8 @@
 # 1.  Transcriptomic Analysis of the effects of acidosis on Glioblastoma cell lines and patient samples
 
 - [1.  Transcriptomic Analysis of the effects of acidosis on Glioblastoma cell lines and patient samples](#1--transcriptomic-analysis-of-the-effects-of-acidosis-on-glioblastoma-cell-lines-and-patient-samples)
-  - [1.1. Introduction](#11-introduction)
-  - [1.2. Project aims](#12-project-aims)
-  - [1.3. Directory tree](#13-directory-tree)
+  - [1.1. Input data](#11-input-data)
+  - [1.2. Directory tree](#12-directory-tree)
 - [2. Bioinformatical pipeline](#2-bioinformatical-pipeline)
   - [2.1. Data preprocessing \& differential gene expression (DGE) analysis](#21-data-preprocessing--differential-gene-expression-dge-analysis)
       - [Overview:](#overview)
@@ -31,18 +30,18 @@
       - [Inputs:](#inputs)
       - [Outputs:](#outputs)
 
-## 1.1. Introduction
+## 1.1. Input data
+
+Three main, different data sources were used in these analyses:
+1. **Affymetrix Clariom D Pico Gene Array** - performed on pooled lasermicrodissected samples from lipid droplet rich (n=5) and lipid droplet lacking (n=5) matched pathological samples (hereinafter called **CCLD**); three patient-derived primary cell lines grown as 3D vs. 2D cultures (**HGCC**); and a pancreatic cancer cell line, PANC1, stimulated by a low-pH environment (pH6.4) for 10 weeks (adapted acidosis, AA) (**PANC1**).
+2. **Illumina HumanHT-12 v4 Expression BeadChip** - used for gene expression analysis of U87 cells grown either in low-pH or hypoxic growth conditions (**U87**).
 
 > [!NOTE]
-> *This section provide a brief overview of the biological background relevant to the research project and explain the biological problem being addressed, its significance in the field, and a summary of the approach or hypothesis being tested.*
+> *All raw and processed data used in this analysis have been uploaded to NCBI's public data repository, the Gene Expression Omnibus (GEO).*
 
-... \[TBA\] ...
+The data are available under the unique IDs **GSE300758** (**CCLD**), **GSE300765** (**U87**), **GSE300768** (**PANC1**), and **GSE300771** (**HGCC**). The accession of the datasets is scheduled to stay private until 30th September, 2025, unless the manuscript enters review earlier.
 
-## 1.2. Project aims
-
-... \[TBA\] ...
-
-## 1.3. Directory tree
+## 1.2. Directory tree
 
 ```bash
 .

@@ -1,7 +1,147 @@
 ################################################################################
 # Created: 2024 10 18 ; Last Modified: 2025 06 24 ; MH                         #
 ################################################################################
-# 1.) Comparing the Uppsala cells and Lipid loaded cells
+# ---------------------- Set up the environment -----------------------------  #
+# Set working directory
+wd <- getwd()
+# Load packages
+if (file.exists(file.path(wd, "packages.R"))) {
+  source(file = file.path(wd, "packages.R"))
+} else {
+  stop("Required file 'packages.R' not found in the working directory.")
+}
+# Source data processing functions
+if (file.exists(file.path(wd, "functions.R"))) {
+  source(file = file.path(wd, "functions.R"))
+} else {
+  stop("Required file 'functions.R' not found in the working directory.")
+}
+# Get current date for results directory
+date <- format(Sys.Date(), "%Y-%m-%d")
+# Create results directory
+venn_dir <- "Results/Venn"
+# Create tables and plots directories
+dir.create(file.path(wd, venn_dir, "tables"), recursive = T, showWarnings = FALSE)
+dir.create(file.path(wd, venn_dir, "plots"), recursive = T, showWarnings = FALSE)
+
+# ---------------------------------------------------------------------------- #
+# -   1.) Create heatmap of the expression of genes of interest              - #
+# ---------------------------------------------------------------------------- #
+# load gene set
+interest_genes <- read.csv("../data/gene-signature-new.txt", header = T,
+                           sep = "\t", stringsAsFactors = T)
+# interest_genes:
+#       "CA9","VEGFA","CA12","BGN","CSPG4","VCAN","NCAN","CHPF","CSGALNACT1",
+#       "CHSY1","UST","SULF2","COL6A1","FN1","THBS4","GPC4","FASN","PPARD",
+#       "PPARGC1A","VLDLR","HILPDA"
+
+# load deg analysis results
+load(file.path(wd, "RData", "HGCC_processedData.RData"))
+load(file.path(wd, "RData", "CCLD_processedData.RData"))
+
+TOTAL.heatmap <- list()
+TOTAL.heatmap$data <- interest_genes %>% 
+  dplyr::inner_join(., CCLD.df[,1:2], by = c("SYMBOL" = "Symbol")) %>%
+  dplyr::inner_join(., HGCC.deg$U3017[,c(2,4)], by = c("SYMBOL" = "ID.Symbol")) %>% 
+  dplyr::inner_join(., HGCC.deg$U3047[,c(2,4)], by = c("SYMBOL" = "ID.Symbol")) %>%
+  dplyr::inner_join(., HGCC.deg$U3054[,c(2,4)], by = c("SYMBOL" = "ID.Symbol")) %>% 
+  dplyr::rename_at(vars(contains("log")), ~c("LDvsnoLD", "U3017", "U3047", "U3054")) %>%
+  dplyr::mutate(Category = factor(Category, 
+                                  levels = c("Acidosis/Hypoxia", "CSPG core", "CSPG Biosynthesis",
+                                             "ECM remodelling", "Lipid metabolism"),
+                                  labels = c("Acidosis/Hypoxia", "CSPG core", "CSPG Biosynthesis",
+                                             "ECM remodelling", "Lipid metabolism"))) %>% 
+  dplyr::select(SYMBOL, Category, U3017, U3047, U3054, LDvsnoLD)
+
+TOTAL.heatmap$matrix <- as.matrix(TOTAL.heatmap$data[,c(3:6)])
+
+row_order <- match(c("CA9","VEGFA","CA12","BGN","CSPG4","VCAN","NCAN",
+                     "CHPF","CSGALNACT1","CHSY1","UST","SULF2","COL6A1","FN1",
+                     "THBS4","GPC4","FASN","PPARD","PPARGC1A","HILPDA","VLDLR"),
+                   TOTAL.heatmap$data$SYMBOL)
+col_order <- order(c(
+  as.numeric(proxy::dist(rbind(TOTAL.heatmap$matrix[,1, drop=T],
+                               TOTAL.heatmap$matrix[,4, drop = T]),
+                         method = "euclidean", pairwise = T)),
+  as.numeric(proxy::dist(rbind(TOTAL.heatmap$matrix[,2, drop=T],
+                               TOTAL.heatmap$matrix[,4, drop = T]),
+                         method = "euclidean", pairwise = T)),
+  as.numeric(proxy::dist(rbind(TOTAL.heatmap$matrix[,3, drop = T],
+                               TOTAL.heatmap$matrix[,4, drop = T]),
+                         method = "euclidean", pairwise = T)),
+  as.numeric(proxy::dist(rbind(TOTAL.heatmap$matrix[,4, drop =T],
+                               TOTAL.heatmap$matrix[,4, drop=T]),
+                         method = "euclidean", pairwise = T))))
+
+
+row.names(TOTAL.heatmap$matrix) <- TOTAL.heatmap$data$SYMBOL 
+TOTAL.heatmap$matrix <- TOTAL.heatmap$matrix[row_order,col_order]#row_order
+
+cat_annot = rowAnnotation(
+  Category = TOTAL.heatmap$data$Category[row_order],
+  col = list(Category = c("Acidosis/Hypoxia" = "darkgreen",
+                          "CSPG core" = "turquoise",
+                          "CSPG Biosynthesis" = "#FF08FF",
+                          "ECM remodelling" = "#8D00FA",
+                          "Lipid metabolism" = "white")
+             
+  ),
+  gp = gpar(col = "black", fontsize = 14, family = "arial"),
+  show_annotation_name = F,
+  annotation_legend_param = list(border = "black")
+)
+
+matrix_col = colorRamp2(c(-4, 0, 4), c("blue", "white", "red"))
+(TOTAL.heatmap$plot = Heatmap(TOTAL.heatmap$matrix, # data matrix
+                              
+                              ### row settings
+                              cluster_rows = F,
+                              row_gap = unit(5, "mm"),
+                              row_names_side = "left",
+                              row_names_gp = gpar(fontsize = 14,
+                                                  family = "arial"),
+                              
+                              ### column settings
+                              cluster_columns = F,
+                              column_names_rot = 0,
+                              column_names_centered = T,
+                              column_names_side = "top",
+                              column_names_gp = gpar(fontsize = 14, 
+                                                     family = "arial"),
+                              column_labels = c("LDvsnoLD" = "", 
+                                                "U3047" = "U3047",
+                                                "U3054" = "U3054", 
+                                                "U3017"="U3017"),
+                              column_split = factor(c("LD vs. noLD", rep("2D vs. 3D", 3)),
+                                                    levels = c("LD vs. noLD", "2D vs. 3D")),
+                              
+                              ### legend settings
+                              col = matrix_col, # color settings
+                              right_annotation = cat_annot, 
+                              heatmap_legend_param = list(
+                                title = "Log2 (Fold change)",
+                                direction = "vertical"),
+                              border_gp = gpar(col = "black", lty = 2)))
+
+svg(file.path(wd, venn_dir, "plots", paste(date, "category_heatmap_new_signature.svg", sep="-")),
+    width = 12, height = 8)
+draw(TOTAL.heatmap$plot , merge_legend = T,
+     heatmap_legend_side = "right", annotation_legend_side = "right")
+dev.off()
+
+# Save results table
+openxlsx::write.xlsx(TOTAL.heatmap$data, 
+                     file.path(wd, venn_dir, "tables", 
+                               paste(date, "category_heatmap_new_signature.xlsx", sep = "-")))
+
+# Remove temporary variables
+rm(list = c("TOTAL.heatmap", "row_order", "col_order", "cat_annot", "matrix_col"))
+
+# ---------------------------------------------------------------------------- #
+# -   2.) Venn diagram of Uppsala cells and Lipid loaded cells               - #
+# ---------------------------------------------------------------------------- #
+load(file.path(wd, "RData", "HGCC_enrichment_results.RData"))
+load(file.path(wd, "RData", "CCLD_enrichment_results.RData"))
 # GSEA on the GO terms from MSigDB
 TOTAL.NES <- list(rbind(HGCC.GSEA$U3017$sig_df[,c("ID","Name", "NES")],
                         HGCC.GO$U3017$sig_df[,c("ID","Name", "NES")]),
@@ -172,10 +312,15 @@ trend.matrix <- point.matrix %>%
     # Specify legend position
     theme(legend.position = 'bottom'))
 
-# Save the plot
-results_dir <- "Results/HGCC"
-ggsave(file.path(results_dir,date,"plots",paste0("TOTAL_GO+pathway_venn_",Sys.Date(), ".png")),
-       bg = "white", plot = TOTAL.venn, width = 12, height = 8)
+# Save the plot as svg for publication
+ggsave(file.path(wd, venn_dir, "plots",
+                 paste(date,"HGCCC&CCLD-GO&pathway-venn.svg", sep = "-")),
+       device = "svg", TOTAL.venn, 
+       width = 12, height = 8, units = "in")
+# Save the plot as png for presentation
+ggsave(file.path(wd, venn_dir, "plots", paste(date,"HGCCC&CCLD-GO&pathway-venn.png", sep = "-")),
+       device = "png", plot = TOTAL.venn, 
+       bg = "white", dpi = 300, width = 12, height = 8, units = "in")
 
 TOTAL.sets <- TOTAL.sets %>% 
   dplyr::select(ID, Name, Regions, trend, U3017, U3017.FDR, U3047, U3047.FDR,
@@ -189,111 +334,19 @@ names(TOTAL.sets) <- names(regions)
 # Save the table
 sapply(names(TOTAL.sets), function(x){
   openxlsx::write.xlsx(TOTAL.sets[[x]], 
-                       file.path(wd, results_dir, "..", 
-                                 paste0("TOTAL_GO+pathway_venn_", x, "_", date,".xlsx")))
+                       file.path(wd, venn_dir, "tables", 
+                                 paste(date, x, "GO&pathway-venn.xlsx", sep = "-")))
 })
 
-rm(list = c(ls(pattern = "matrix"), "regions", "TOTAL.NES", "TOTAL.FDR"))
+rm(list = c(ls(pattern = "matrix"), ls(pattern = "TOTAL."), 
+            ls(pattern = "HGCC."), ls(pattern = "CCLD."), "regions"))
 
-interest_genes <- read.csv("../data/gene-signature-new.txt", header = T,
-                           sep = "\t", stringsAsFactors = T)
-# interest_genes:
-# "CA9","VEGFA","CA12","BGN","CSPG4","VCAN","NCAN","CHPF","CSGALNACT1","CHSY1","UST",
-# "SULF2","COL6A1","FN1","THBS4","GPC4","FASN","PPARD","PPARGC1A","VLDLR","HILPDA"
-TOTAL.heatmap <- list()
-TOTAL.heatmap$data <- interest_genes %>% 
-  dplyr::inner_join(., CCLD.df[,1:2], by = c("SYMBOL" = "Symbol")) %>%
-  dplyr::inner_join(., HGCC.deg$U3017[,c(2,4)], by = c("SYMBOL" = "Symbol")) %>% 
-  dplyr::inner_join(., HGCC.deg$U3047[,c(2,4)], by = c("SYMBOL" = "Symbol")) %>%
-  dplyr::inner_join(., HGCC.deg$U3054[,c(2,4)], by = c("SYMBOL" = "Symbol")) %>% 
-  dplyr::rename_at(vars(contains("log2")), ~c("LDvsnoLD", "U3017", "U3047", "U3054")) %>%
-  dplyr::mutate(Category = factor(Category, 
-                                      levels = c("Acidosis/Hypoxia", "CSPG core", "CSPG Biosynthesis",
-                                                 "ECM remodelling", "Lipid metabolism"),
-                                      labels = c("Acidosis/Hypoxia", "CSPG core", "CSPG Biosynthesis",
-                                                 "ECM remodelling", "Lipid metabolism"))) %>% 
-  dplyr::select(SYMBOL, Category, U3017, U3047, U3054, LDvsnoLD)
-
-TOTAL.heatmap$matrix <- as.matrix(TOTAL.heatmap$data[,c(3:6)])
-
-row_order <- match(c("CA9","VEGFA","CA12","BGN","CSPG4","VCAN","NCAN",
-                     "CHPF","CSGALNACT1","CHSY1","UST","SULF2","COL6A1","FN1",
-                     "THBS4","GPC4","FASN","PPARD","PPARGC1A","HILPDA","VLDLR"),
-                   TOTAL.heatmap$data$SYMBOL)
-col_order <- order(c(
-  as.numeric(proxy::dist(rbind(TOTAL.heatmap$matrix[,1, drop=T],
-                               TOTAL.heatmap$matrix[,4, drop = T]),
-                         method = "euclidean", pairwise = T)),
-  as.numeric(proxy::dist(rbind(TOTAL.heatmap$matrix[,2, drop=T],
-                               TOTAL.heatmap$matrix[,4, drop = T]),
-                         method = "euclidean", pairwise = T)),
-  as.numeric(proxy::dist(rbind(TOTAL.heatmap$matrix[,3, drop = T],
-                               TOTAL.heatmap$matrix[,4, drop = T]),
-                         method = "euclidean", pairwise = T)),
-  as.numeric(proxy::dist(rbind(TOTAL.heatmap$matrix[,4, drop =T],
-                               TOTAL.heatmap$matrix[,4, drop=T]),
-                         method = "euclidean", pairwise = T))))
-
-
-row.names(TOTAL.heatmap$matrix) <- TOTAL.heatmap$data$SYMBOL 
-TOTAL.heatmap$matrix <- TOTAL.heatmap$matrix[row_order,col_order]#row_order
-
-cat_annot = rowAnnotation(
-  Category = TOTAL.heatmap$data$Category[row_order],
-  col = list(Category = c("Acidosis/Hypoxia" = "darkgreen",
-                          "CSPG core" = "turquoise",
-                          "CSPG Biosynthesis" = "#FF08FF",
-                          "ECM remodelling" = "#8D00FA",
-                          "Lipid metabolism" = "white")
-            
-  ),
-  gp = gpar(col = "black", fontsize = 14, family = "arial"),
-  show_annotation_name = F,
-  annotation_legend_param = list(border = "black")
-)
-
-matrix_col = colorRamp2(c(-4, 0, 4), c("blue", "white", "red"))
-(TOTAL.heatmap$plot = Heatmap(TOTAL.heatmap$matrix, # data matrix
-                              
-                              ### row settings
-                              cluster_rows = F,
-                              row_gap = unit(5, "mm"),
-                              row_names_side = "left",
-                              row_names_gp = gpar(fontsize = 14,
-                                                  family = "arial"),
-                              
-                              ### column settings
-                              cluster_columns = F,
-                              column_names_rot = 0,
-                              column_names_centered = T,
-                              column_names_side = "top",
-                              column_names_gp = gpar(fontsize = 14, 
-                                                     family = "arial"),
-                              column_labels = c("LDvsnoLD" = "", 
-                                                "U3047" = "U3047",
-                                                "U3054" = "U3054", 
-                                                "U3017"="U3017"),
-                              column_split = factor(c("LD vs. noLD", rep("2D vs. 3D", 3)),
-                                                    levels = c("LD vs. noLD", "2D vs. 3D")),
-                              
-                              ### legend settings
-                              col = matrix_col, # color settings
-                              right_annotation = cat_annot, 
-                              heatmap_legend_param = list(
-                                title = "Log2 (Fold change)",
-                                direction = "vertical"),
-                              border_gp = gpar(col = "black", lty = 2)))
-
-svg(file.path("Results","signature", "category_heatmap_new_signature.svg"), width = 12, height = 8)
-draw(TOTAL.heatmap$plot , merge_legend = T,
-     heatmap_legend_side = "right", annotation_legend_side = "right")
-dev.off()
-
-################################################################################
-# 4.) The comparison of AA vs CA vs Hypoxia in U87 cells                       #
-################################################################################
-# 1. Load the GSEA results 
-# GSEA on the GO terms from MSigDB
+# ---------------------------------------------------------------------------- #
+# -   2.) Comparison of AA vs CA vs Hypoxia in U87 cells                     - #
+# ---------------------------------------------------------------------------- #
+# Load the GSEA results
+load(file.path(wd, "RData", "U87_enrichment_results.RData"))
+# Combine the GSEA results
 U87.NES <- list(rbind(U87.GSEA$`sel_pH647-control_sel`$sig_df[,c("ID","Name", "NES")],
                       U87.GO$`sel_pH647-control_sel`$sig_df[,c("ID","Name", "NES")]),
                 rbind(U87.GSEA$`acu_pH68-control_acu`$sig_df[,c("ID","Name", "NES")],
@@ -456,9 +509,16 @@ trend.matrix <- U87.sets %>%
     # Specify legend position
     theme(legend.position = 'bottom'))
 
-# Save the plot
-ggsave(file.path(wd, results_dir,date, "plots","U87_GO+pathway_venn.png"),
-       bg = "white", plot = U87.venn, width = 12, height = 8)
+# Save the plot as svg for publication
+ggsave(file.path(wd, venn_dir, "plots",
+                 paste(date, "U87-GO&pathway-venn.svg", sep = "-")),
+       device = "svg", plot = U87.venn,
+       bg = "white", width = 12, height = 8, units = "in")
+# Save the plot as png for presentation
+ggsave(file.path(wd, venn_dir, "plots",
+                 paste(date, "U87-GO&pathway-venn.png", sep = "-")),
+       device = "png", plot = U87.venn,
+       bg = "white", dpi = 300, width = 12, height = 8, units = "in")
 
 U87.sets <- U87.sets %>% 
   dplyr::select(c("ID", "Name", "Regions", "trend") 
@@ -469,9 +529,16 @@ names(U87.sets) <- names(regions)
 # Save the table
 sapply(names(U87.sets), function(x){
   openxlsx::write.xlsx(U87.sets[[x]], 
-                       file.path(wd, results_dir, date, "tables", 
-                                 paste0("U87_GO+pathway_venn_", x, "_", date,".xlsx")))
+                       file.path(wd, venn_dir, "tables", 
+                                 paste(date, "U87", x, "GO&pathway-venn.xlsx", sep = "-")))
 })
+# Remove intermediate objects
+rm(list = c(ls(pattern = "matrix"), ls(pattern = "U87."), "regions"))
 
-rm(list = c(ls(pattern = "matrix"), "regions", "U87.NES", "U87.FDR"))
-
+################################################################################
+# Clean up the environment                                                     #
+################################################################################
+# Run garbage collection to free up memory
+gc() 
+# Clear the environment
+rm(list = ls()) 

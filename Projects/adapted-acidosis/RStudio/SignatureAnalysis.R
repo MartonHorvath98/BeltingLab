@@ -1,6 +1,24 @@
 ################################################################################
 # Created: 2024 05 24 ; Last Modified: 2025 06 24 ; KGO & MH                   #
 ################################################################################
+# ---------------------- Set up the environment -----------------------------  #
+# Set working directory
+wd <- getwd()
+# Load packages
+if (file.exists(file.path(wd, "packages.R"))) {
+  source(file = file.path(wd, "packages.R"))
+} else {
+  stop("Required file 'packages.R' not found in the working directory.")
+}
+# Source data processing functions
+if (file.exists(file.path(wd, "functions.R"))) {
+  source(file = file.path(wd, "functions.R"))
+} else {
+  stop("Required file 'functions.R' not found in the working directory.")
+}
+# Load hallmarks
+load(file = file.path(wd, "RData", "MSigDB_gene_sets.RData"))
+# Load gene signature
 lipid_droplet_genes <- read.csv("data/gene-signature-new.txt", header = T,
                            sep = "\t", stringsAsFactors = T)
 subtype_hallmarks <- msigdbr_df %>% 

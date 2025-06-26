@@ -43,8 +43,11 @@ limmaDEA <- function(.data, .design, .contrast){
   rownames(mat) <- .data$PROBEID
   # Create a design matrix
   t <- as.factor(.design)
+  levels(t) <- make.names(levels(t)) # rename levels to ensure syntactically valid names
+  
   design <- model.matrix(~0 + t)
   colnames(design) <- levels(t)
+  
   # Fit the linear model
   fit <- lmFit(mat, design)
   fit$genes$ID <- rownames(mat)
@@ -713,8 +716,8 @@ get_cluster_representative <- function(.cluster, .degs){
     dplyr::select(ID, Name, core_enrichment, cluster) %>%
     tidyr::separate_rows(core_enrichment, sep = "/")
   
-  linkage$logFC = .degs$log2FoldChange[match(linkage$core_enrichment, .degs$Symbol)]
-  linkage$padj = .degs$padj[match(linkage$core_enrichment, .degs$Symbol)]
+  linkage$logFC = .degs$logFC[match(linkage$core_enrichment, .degs$ID.Symbol)]
+  linkage$padj = .degs$adj.P.Val[match(linkage$core_enrichment, .degs$ID.Symbol)]
   
   # calculate normalized term weight
   linkage$weight = abs(linkage$logFC)*(-log10(linkage$padj))
@@ -832,8 +835,11 @@ getCircplotData <- function(.cluster, .deg, .interest_cluster, .interest_cluster
     dplyr::filter(ID %in% names(.interest_cluster)) %>% 
     dplyr::select(ID, Name, core_enrichment, cluster) %>%
     tidyr::separate_rows(core_enrichment, sep = "/") %>% 
-    dplyr::left_join(.deg[,c("Symbol","log2FoldChange","padj")],
-                     by = c("core_enrichment" = "Symbol")) %>% 
+    dplyr::left_join(.deg[,c("ID.Symbol","logFC","adj.P.Val")],
+                     by = c("core_enrichment" = "ID.Symbol")) %>%
+    dplyr::rename(
+      "log2FoldChange" = logFC,
+      "padj" = adj.P.Val) %>% 
     dplyr::rowwise() %>%
     # ...as a function of the z-score and adjusted p-value
     dplyr::mutate(weight = abs(log2FoldChange)*(-log10(padj))) %>% 

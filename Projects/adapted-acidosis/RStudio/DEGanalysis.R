@@ -1,13 +1,9 @@
 ################################################################################
-# Created: 2024 10 07 ; Last Modified: 2025 06 24 ; MH                        #
+# Created: 2024 10 07 ; Last Modified: 2025 06 24 ; MH                         #
 ################################################################################
 # ---------------------- Set up the environment -----------------------------  #
 # Set working directory
 wd <- getwd()
-path <- c("data/processed/")
-files <- list.files(file.path(wd, path),
-                    pattern = ".xlsx$", full.names = TRUE)
-date <- Sys.Date()
 # Load packages
 if (file.exists(file.path(wd, "packages.R"))) {
   source(file = file.path(wd, "packages.R"))
@@ -43,6 +39,9 @@ terms <- terms %>%
   dplyr::mutate(gs_subcat = ifelse(gs_cat == "H", "HALLMARK", gs_subcat),
                 gs_exact_source = ifelse(gs_cat == "H", gs_id, gs_exact_source)) %>% 
   dplyr::ungroup(.)
+# Save gene sets
+save(msigdbr_df, pathways, terms, file = "./RData/MSigDB_gene_sets.RData")
+
 # add colour palette
 DEG_palette <- c("NS" = '#c1c1c1',
                  "Log10P" = '#363636',
@@ -53,15 +52,22 @@ DEG_palette <- c("NS" = '#c1c1c1',
 ################################################################################
 #             Differential gene expression analysis                            #
 ################################################################################
+# Get current date for results directory
+date <- format(Sys.Date(), "%Y-%m-%d")
+# Create results directory
+degs_dir <- "Results/DEG"
+enrich_dir <- "Results/Enrichment"
+# Create tables and plots directories
+dir.create(file.path(wd, degs_dir, "tables"), recursive = T, showWarnings = FALSE)
+dir.create(file.path(wd, degs_dir, "plots"), recursive = T, showWarnings = FALSE)
+dir.create(file.path(wd, enrich_dir, "tables"), recursive = T, showWarnings = FALSE)
+dir.create(file.path(wd, enrich_dir, "plots"), recursive = T, showWarnings = FALSE)
 
 # ---------------------------------------------------------------------------- #
 # -    1.) Svenja's CC +LD and CC no LD (Clariom D Human Pico) Affymetrix    - #
 # ---------------------------------------------------------------------------- #
-
-#Results directory
-results_dir <- "Results/CCLD"
-dir.create(file.path(wd, results_dir, date), recursive = T, showWarnings = FALSE)
-
+# Load the processed data
+load(file.path(wd, "RData", "CCLD_processedData.RData"))
 # Data exploration 
 CCLD.df <- CCLD.expr[,c(5,7)] %>% 
   setNames(., c("Symbol", "log2FoldChange")) %>%
@@ -77,10 +83,13 @@ CCLD.df <- CCLD.expr[,c(5,7)] %>%
       log2FoldChange > 0.5 ~ 'Signif. up-regulated',
       T ~ 'NS')) %>% 
   dplyr::filter(complete.cases(.))
-# Save file
-dir.create(file.path(wd, results_dir, date, "tables"), recursive = T, showWarnings = FALSE)
+
+# Save the results
+save(CCLD.expr, CCLD.df,
+     file = file.path(wd, "RData", "CCLD_processedData.RData"))
+# Save to file
 write.xlsx(merge(CCLD.df, CCLD.expr[,c(2,3,5)], by.x = "Symbol", by.y = "SYMBOL"),
-           file.path(wd, results_dir, date, "tables", "LDvsnoLD_DEGs.xlsx"))
+           file.path(wd, degs_dir, "tables", paste(date, "CCLD-DEGs.xlsx", sep = "-")))
 
 ## extract entrez IDs for gene set of interest and background
 CCLD.genes <- get_genelist(.df = CCLD.df,
@@ -97,7 +106,7 @@ CCLD.ORA <- run_ora(.interest = CCLD.genes$interest,
 CCLD.ORA <- c(CCLD.ORA, extract_ora_results(.ora = CCLD.ORA$ora, .db = pathways))
 # Save the results
 openxlsx::write.xlsx(CCLD.ORA[c(2:3)], 
-                     file.path(wd, results_dir,  date, "tables", "LDvsnoLD_pathway_ORA.xlsx"))
+                     file.path(wd, enrich_dir, "tables", paste(date, "CCLD-ORA-pathways.xlsx", sep = "-")))
 
 # GSEA on the GO terms from MSigDB
 CCLD.GO <- list()
@@ -107,7 +116,7 @@ CCLD.GO <- c(CCLD.GO, extract_gsea_results(.gsea = CCLD.GO$gsea, .db = terms))
 
 # Save the results
 openxlsx::write.xlsx(CCLD.GO[c(2:3)], 
-                     file.path(wd, results_dir,  date, "tables", "LDvsnoLD_all_go&hallmark_GSEA.xlsx"))
+                     file.path(wd, enrich_dir, "tables", paste(date, "CCLD-GSEA-go&hallmark.xlsx", sep = "-")))
 
 # GSEA on the KEGG- and REACTOME pathways from MSigDB
 CCLD.GSEA <- list()
@@ -117,7 +126,7 @@ CCLD.GSEA <- c(CCLD.GSEA, extract_gsea_results(.gsea = CCLD.GSEA$gsea, .db = pat
 
 # Save the results
 openxlsx::write.xlsx(CCLD.GSEA[c(2:3)],
-                     file.path(wd, results_dir,  date, "tables", "LDvsnoLD_all_pathway_GSEA.xlsx"))
+                     file.path(wd, enrich_dir, "tables", paste(date, "CCLD-GSEA-pathways.xlsx", sep="-")))
 
 # Visualize selected enrichment scores 
 palette = c("EXTRACELLULAR_MATRIX_ORGANIZATION" = "#380186",
@@ -131,8 +140,8 @@ go.ranks = which(CCLD.GO$df$Name %in% names(palette))
 
 # Extract running enrichment scores for selected gene sets
 CCLD.enrichplot <- list()
-CCLD.enrichplot$runningScores  <- do.call(rbind, c(lapply(pathway.ranks, gsInfo, object = CCLD.GSEA$gsea),
-                                                   lapply(go.ranks, gsInfo, object = CCLD.GO$gsea)))
+CCLD.enrichplot$runningScores <- do.call(rbind, c(lapply(pathway.ranks, gsInfo, object = CCLD.GSEA$gsea),
+                                                  lapply(go.ranks, gsInfo, object = CCLD.GO$gsea)))
 # Clean up pathway/GO term names for plotting
 CCLD.enrichplot$runningScores$Description <- factor(
   gsub(x = CCLD.enrichplot$runningScores$Description, pattern = "REACTOME_|GOBP_", replacement =  ""),
@@ -148,6 +157,22 @@ p2 <- plotGeneRank(.df = CCLD.enrichplot$runningScores,
                    .x = "x", .facet = "Description~.",
                    .color = "Description", .palette = palette)
 
+# Combine running score and gene rank plots into a single figure
+(CCLD.enrichplot$plot <- cowplot::plot_grid(
+  p1, p2 + theme(strip.text.y.left = element_blank()),
+  byrow = T, nrow = 2, ncol = 1, scale = .95, 
+  rel_heights = c(1.2,1), axis = "r",
+  margins = c(0.5, 0.5, 0.5, 0.5)))
+
+# Save plot as svg for publication
+ggsave(file.path(wd, enrich_dir, "plots", paste(date, "CCLD-enrichplot.svg", sep = "-")), 
+       device = "svg", plot = CCLD.enrichplot$plot, 
+       bg = "white", width = 6, height = 4.45, units = "in")
+# Save plot as png for presentation
+ggsave(file.path(wd, enrich_dir, "plots", paste(date, "CCLD-enrichplot.png", sep = "-")), 
+       device = "png", plot = CCLD.enrichplot$plot, 
+       bg = "white", dpi = 300, width = 6, height = 4.45, units = "in")
+
 # Prepare summary table of enrichment results for selected gene sets
 CCLD.enrichplot$table <- rbind(CCLD.GSEA$df[pathway.ranks,],
                                CCLD.GO$df[go.ranks,]) %>% 
@@ -157,44 +182,31 @@ CCLD.enrichplot$table <- rbind(CCLD.GSEA$df[pathway.ranks,],
   dplyr::mutate(
     NES = round(NES, 4),
     FDR = round(p.adjust, 4)) %>%
-  dplyr::mutate(FDR = case_when(
-    # ***P< 0.01, **P< 0.05, and *P< 0.1
-    FDR < 0.01 ~ paste("***"),
-    FDR < 0.05 ~ paste("**"),
-    FDR < 0.1 ~ paste("*"),
-    TRUE ~ as.character(FDR),
-  )) %>% 
-  dplyr::select(c(5,13))
+  dplyr::mutate(
+    signif.level = case_when(
+      # ***P< 0.01, **P< 0.05, and *P< 0.1
+      FDR < 0.01 ~ paste("***"),
+      FDR < 0.05 ~ paste("**"),
+      FDR < 0.1 ~ paste("*"),
+      TRUE ~ as.character(FDR),
+    )) %>% 
+  dplyr::select(c(5,13,14))
 
-# Create a table grob for displaying enrichment summary
-table_grob <- tableGrob(
-  CCLD.enrichplot$table, 
-  theme = ttheme_minimal(
-    base_size = 14,
-    core = list(
-      fg_params = list(hjust = 0.5, x = 0.5, col = palette)),
-    rowhead = list(
-      fg_params = list(hjust = 0, x = 0,col = palette[c(5,1,2,3,4)]))
-  )) 
+# Save table
+openxlsx::write.xlsx(CCLD.enrichplot$table, 
+                     file.path(wd, enrich_dir, "tables", paste(date, "CCLD-enrichplot-table.xlsx", sep = "-")))
 
-# Combine running score and gene rank plots into a single figure
-(CCLD.enrichplot$plot <- cowplot::plot_grid(
-  p1, p2,
-  byrow = T, nrow = 2, ncol = 1, scale = .95, 
-  rel_heights = c(1.2,1), axis = "r",
-  margins = c(0.5, 0.5, 0.5, 0.5)))
-
-# Save the combined enrichment plot as an SVG file
-ggsave(file.path(wd, results_dir,  date, "plots", "CCLD_GSEA.svg"), 
-       device = "svg", plot = CCLD.enrichplot$plot, 
-       bg = "white", width = 6, height = 4.45, units = "in")
+# Save enrichment results
+save(CCLD.GO, CCLD.GSEA,
+     file = file.path(wd, "RData", "CCLD_enrichment_results.RData"))
+# Clean up the environment
+rm(list = c(ls(pattern = "CCLD.*"), ls(pattern = "*.ranks"), "p1", "p2"))
 
 # ---------------------------------------------------------------------------- #
 # -   2.) Hugo's Primary cells 2D vs 3D (Clariom D Human Pico) Affymetrix    - #
 # ---------------------------------------------------------------------------- #
-results_dir <- "Results/HGCC"
-dir.create(file.path(wd, results_dir, date), recursive = T, showWarnings = FALSE)
-
+# Load the processed data
+load(file.path(wd, "RData", "HGCC_processedData.RData"))
 # Prepare metadata table based on the sample names
 samples <- factor(c("U3017_2D", "U3017_2D","U3017_2D",
                     "U3017_3D", "U3017_3D", "U3017_3D",
@@ -239,17 +251,28 @@ pca_base <- prcomp(t(HGCC.expr[,2:19]), center = TRUE, scale. = TRUE)
                                 "U3047_2D" = 16, "U3047_3D" = 16,
                                 "U3054_2D" = 17, "U3054_3D" = 17)) +
   guides(color=guide_legend(ncol=3), fill=guide_legend(ncol=3)))
+# Save the plot as png
+ggsave(file.path(wd, degs_dir, "plots", paste(date, "HGCC-PCA-plot.png", sep = "-")),
+       device = "png", HGCC.plots$PCA, 
+       bg = "white", dpi = 300, width = 8, height = 6, units = "in")
 
-# Venn diagram from the shared DEGs
+# Create DEG tables
 HGCC.deg <- lapply(HGCC.deg, function(x){
   df = x %>% 
     dplyr::rename(PROBEID = "ID.ID", Symbol = "ID.Symbol", 
-                  entrezID = "ID.Entrez", log2FoldChange = "logFC",
+                  entrezID = "ID.entrezID", log2FoldChange = "logFC",
                   pvalue = "P.Value", padj = "adj.P.Val")
   
   get_significance(.df = df)
 })
+# Save tables
+sapply(names(HGCC.deg), function(x){
+  openxlsx::write.xlsx(HGCC.deg[[x]], 
+                       file.path(wd, degs_dir, "tables",
+                                 paste(date, "HGCC", x, "DEGs.xlsx", sep = "-")))
+})
 
+# Venn diagram from the shared DEGs
 HGCC.venn <- list()
 HGCC.venn <- get_regions(.list = HGCC.deg[1:3], .names = c("U3017","U3047","U3054"))
 
@@ -258,27 +281,25 @@ HGCC.venn <- get_regions(.list = HGCC.deg[1:3], .names = c("U3017","U3047","U305
                            .labels = c("U3054",
                                        "U3047",
                                        "U3017")))
+# Save plot
+ggsave(file.path(wd, degs_dir, "plots", paste(date, "HGCC-VENN-plot.png", sep = "-")),
+       device = "png", HGCC.plots$VENN, 
+       bg = "white", dpi = 300, width = 12, height = 8, units = "in")
+
+# Save tables
+openxlsx::write.xlsx(HGCC.venn, 
+                     file.path(wd, degs_dir, "tables",
+                               paste(date, "HGCC-DEGs-venn-regions.xlsx", sep = "-")))
 
 # Create a Vulcano plot for the shared DEGs
 (p1 <- plot_vulcan(HGCC.deg$U3017) + ggtitle("U3017"))
 (p2 <- plot_vulcan(HGCC.deg$U3047) + ggtitle("U3047"))
 (p3 <- plot_vulcan(HGCC.deg$U3054) + ggtitle("U3054"))
-
 (HGCC.plots$vulcano <- cowplot::plot_grid(p1, p2, p3, nrow = 1))
-
-dir.create(file.path(wd, results_dir, date, "plots"), recursive = T, showWarnings = FALSE)
-# Save the PCA plot
-ggsave(file.path(wd, results_dir, date, "plots", "HGCC_PCA_plot.png"), bg = "white",
-       HGCC.plots$PCA, width = 8, height = 6, dpi = 300)
-# Save the VENN plot
-ggsave(file.path(wd, results_dir, date, "plots", "HGCC_VENN_plot.png"), bg = "white",
-       HGCC.plots$VENN, width = 12, height = 8, dpi = 300)
 # Save the Vulcano plot
-ggsave(file.path(wd, results_dir, date, "plots", "HGCC_Vulcano_plot.png"), bg = "white",
-       HGCC.plots$vulcano, width = 18, height = 6, dpi = 300)
-
-# remove intermediate results
-rm(list = c("pca_base","p1","p2","p3","samples"))
+ggsave(file.path(wd, degs_dir, "plots", paste(date, "HGCC-vulcano-plot.png")),
+       device = "png", HGCC.plots$vulcano, 
+       bg = "white", dpi = 300, width = 20, height = 8, units = "in")
 
 ### Over-representation (ORA) and Gene Set Enrichment Analysis (GSEA)
 # extract entrez IDs for gene set of interest and background
@@ -301,11 +322,10 @@ HGCC.ORA <- lapply(HGCC.ORA, function(x){
   return(c(x, extract_ora_results(.ora = x[["ora"]],
                                   .db = pathways)))})
 # Save the results
-dir.create(file.path(wd, results_dir, date, "tables"), recursive = T, showWarnings = FALSE)
 sapply(names(HGCC.ORA), function(x){
   openxlsx::write.xlsx(HGCC.ORA[[x]][c(2:3)], 
-                       file.path(wd, results_dir, date, "tables",
-                                 paste0("HGCC_", x, "_all_pathway_ORA.xlsx")))
+                       file.path(wd, enrich_dir, "tables",
+                                 paste(date, "HGCC", x, "ORA-pathways.xlsx", sep = "-")))
 })
 
 # Run the GSEA analysis
@@ -319,11 +339,12 @@ HGCC.GO <- lapply(HGCC.GO,
                                .gsea = x[["gsea"]],
                                .db = terms)))
                   })
+
 # Save the results
 sapply(names(HGCC.GO), function(x){
   openxlsx::write.xlsx(HGCC.GO[[x]][c(2:3)], 
-                       file.path(wd, results_dir, date, "tables",
-                                 paste0("HGCC_", x, "_all_go&hallmark_GSEA.xlsx")))
+                       file.path(wd, enrich_dir, "tables",
+                                 paste(date, "HGCC", x, "GSEA-go&hallmark.xlsx", sep = "-")))
 })
 
 HGCC.GSEA <- list()
@@ -339,11 +360,20 @@ HGCC.GSEA <- lapply(HGCC.GSEA,
 # Save the results
 sapply(names(HGCC.GSEA), function(x){
   openxlsx::write.xlsx(HGCC.GSEA[[x]][c(2:3)], 
-                       file.path(wd, results_dir, date, "tables",
-                                 paste0("HGCC_", x, "_all_pathway_GSEA.xlsx")))
+                       file.path(wd, enrich_dir, "tables",
+                                 paste(date, "HGCC", x, "GSEA-pathways.xlsx", sep = "-")))
 })
 
+# Save enrichment results
+save(HGCC.GO, HGCC.GSEA,
+     file = file.path(wd, "RData", "HGCC_enrichment_results.RData"))
+# Clear intermediate results
+rm(list = c(ls(pattern = "HGCC.*"), "p1","p2","p3","pca_base"))
+
 # Combine enrichment results for CCLD and HGCC cell lines
+load(file.path(wd, "RData", "CCLD_enrichment_results.RData"))
+load(file.path(wd, "RData", "HGCC_enrichment_results.RData"))
+
 GSEA.object = list(
   U3017 = HGCC.GSEA$U3017$gsea,
   U3047 = HGCC.GSEA$U3047$gsea,
@@ -363,6 +393,8 @@ tgfb.ranks = list(
   U3047 = which(HGCC.GSEA$U3047$df$ID == "hsa04350"),
   U3054 = which(HGCC.GSEA$U3054$df$ID == "hsa04350"),
   CCLD = which(CCLD.GSEA$df$ID == "hsa04350"))
+
+col_order = c(4,3,2,1)
 
 HGCC.enrichplot <- list()
 HGCC.enrichplot$TGFB$TOTAL_scores  <- do.call(rbind, c(
@@ -408,13 +440,13 @@ HGCC.enrichplot$TGFB$TOTAL_table <- getEnrichmentTable(
   margins = c(0.5, 0.5, 0.5, 0.5)))
 
 # Save as svg for publication
-ggsave(file.path(wd, results_dir, date, "plots", "TGFB_GSEA_enrichment_plot.svg"),
+ggsave(file.path(wd, enrich_dir, "plots", paste(date, "HGCC-TGFb-GSEA-enrichment-plot.svg", sep = "-")),
        device = "svg", plot = HGCC.enrichplot$TGFB$TOTAL_plot,
        bg = "white", width = 6, height = 4.45, units = "in")
 # Save as png for presentation
-ggsave(file.path(wd, results_dir, date, "plots", "TGFB_GSEA_enrichment_plot.png"),
+ggsave(file.path(wd, enrich_dir, "plots", paste(date, "HGCC-TGFb-GSEA-enrichment-plot.png", sep = "-")),
        device = "png", plot = HGCC.enrichplot$TGFB$TOTAL_plot,
-       bg = "white", ppi = 300, width = 6, height = 4.45, units = "in")
+       bg = "white", dpi = 300, width = 6, height = 4.45, units = "in")
 
 # 2.) Epithelial-to-mesenchymal transition (EMT): "GO:0001837"
 emt.ranks = list(
@@ -464,13 +496,13 @@ HGCC.enrichplot$EMT$TOTAL_table <- getEnrichmentTable(
   margins = c(0.5, 0.5, 0.5, 0.5)))
 
 # Save as svg for publication
-ggsave(file.path(wd, results_dir, date, "plots", "EMT_GO_enrichment_plot.svg"),
-       device = "svg", plot = EMT.enrichplot$TOTAL_plot, 
+ggsave(file.path(wd, enrich_dir, "plots", paste(date, "HGCC-EMT-GSEA-enrichment-plot.svg", sep = "-")),
+       device = "svg", plot = HGCC.enrichplot$EMT$TOTAL_plot, 
        bg = "white", width = 6, height = 4.45, units = "in")
 # Save as png for presentation
-ggsave(file.path(wd, results_dir, date, "plots", "EMT_GO_enrichment_plot.png"),
+ggsave(file.path(wd, enrich_dir, "plots", paste(date, "HGCC-EMT-GSEA-enrichment-plot.png", sep = "-")),
        device = "png", plot = HGCC.enrichplot$EMT$TOTAL_plot, 
-       bg = "white", ppi = 300, width = 6, height = 4.45, units = "in")
+       bg = "white", dpi = 300, width = 6, height = 4.45, units = "in")
 
 # 3.) Hypoxia: "M5891"
 hypoxia.ranks = list(
@@ -520,13 +552,13 @@ HGCC.enrichplot$HYPOXIA$TOTAL_table <- getEnrichmentTable(
   margins = c(0.5, 0.5, 0.5, 0.5)))
 
 # Save as svg for publication
-ggsave(file.path(wd, results_dir, date, "plots", "Hypoxia_GO_enrichment_plot.svg"),
-       device = "svg", plot = Hypoxia.enrichplot$TOTAL_plot, 
+ggsave(file.path(wd, enrich_dir, "plots", paste(date, "HGCC-Hypoxia-GSEA-enrichment-plot.svg", sep = "-")),
+       device = "svg", plot = HGCC.enrichplot$HYPOXIA$TOTAL_plot, 
        bg = "white", width = 6, height = 4.45, units = "in")
 # Save as png for presentation
-ggsave(file.path(wd, results_dir, date, "plots", "Hypoxia_GO_enrichment_plot.png"),
+ggsave(file.path(wd, enrich_dir, "plots", paste(date, "HGCC-Hypoxia-GSEA-enrichment-plot.png", sep = "-")),
        device = "png", plot = HGCC.enrichplot$HYPOXIA$TOTAL_plot, 
-       bg = "white", ppi = 300, width = 6, height = 4.45, units = "in")
+       bg = "white", dpi = 300, width = 6, height = 4.45, units = "in")
 
 # Vulcano visualization of the shared and selected enriched terms
 vulcano_pathways <- read.csv("../data/pathways-of-interest.txt", header = T,
@@ -572,14 +604,14 @@ vulcano.object <- lapply(vulcano.object, function(df) {
 HGCC.vulcano <- list()
 (HGCC.vulcano$ECM <- lapply(vulcano.object, function(x){
   plotClusters(.df = x, 
-               .pathways = interest_pathways %>% filter(Category == "ECM"))
+               .pathways = vulcano_pathways %>% filter(Category == "ECM"))
 }))
-# Save individual plots
+# Save individual plots as png
 sapply(names(HGCC.vulcano$ECM), function(x){
-  ggsave(file.path(wd, results_dir, date,"plots",
-                   paste(x,"ECM_GSEA_Vulcano_plot.svg",sep = "_")),
-         device = "svg", plot = HGCC.vulcano$ECM[[x]],
-         bg = "white", width = 12, height = 8, units = "in")
+  ggsave(file.path(wd, enrich_dir, "plots", 
+                   paste(date, "HGCC", x, "ECM-GSEA-vulcano-plot.png", sep = "-")),
+         device = "png", plot = HGCC.vulcano$ECM[[x]],
+         bg = "white", dpi = 300, width = 12, height = 8, units = "in")
 })
 # Combine the ECM plots into a single figure
 (HGCC.vulcano$ECM$total <- cowplot::plot_grid(
@@ -594,25 +626,25 @@ sapply(names(HGCC.vulcano$ECM), function(x){
   margins = c(0.5, 0.5, 0.5, 0.5)))
 
 # Save the plot as svg for publication
-ggsave(file.path(wd, results_dir, date, "plots", "HGCC_combined_ECM_GSEA_Vulcano.svg"),
+ggsave(file.path(wd, enrich_dir, "plots", paste(date, "HGCC-ECM-GSEA-vulcano-plot.svg", sep = "-")),
        device = "svg", plot = HGCC.vulcano$ECM$total,
        bg = "white", width = 15, height = 5, units = "in")
 # Save the plot as png for presentation
-ggsave(file.path(wd, results_dir, date, "plots", "HGCC_combined_ECM_GSEA_Vulcano.svg"),
+ggsave(file.path(wd, enrich_dir, "plots", paste(date, "HGCC-ECM-GSEA-vulcano-plot.png", sep = "-")),
        device = "png", plot = HGCC.vulcano$ECM$total, 
        bg = "white", dpi = 300, width = 15, height = 5, units = "in")
 
 # 2.) Hypoxia
 (HGCC.vulcano$HYPOXIA <- lapply(vulcano.object, function(x){
   plotClusters(.df = x, 
-               .pathways = interest_pathways %>% filter(Category == "HYPOXIA"))
+               .pathways = vulcano_pathways %>% filter(Category == "HYPOXIA"))
 }))
 # Save individual plots
 sapply(names(HGCC.vulcano$HYPOXIA), function(x){
-  ggsave(file.path(wd, results_dir,date, "plots",
-                   paste(x,"Hypoxia_GSEA_Vulcano_plot.svg",sep = "_")),
-         device = "svg", plot = HGCC.vulcano$HYPOXIA[[x]], 
-         bg = "white", width = 12, height = 8, units = "in")
+  ggsave(file.path(wd, enrich_dir, "plots", 
+                   paste(date, "HGCC", x,"Hypoxia-GSEA-vulcano-plot.png",sep = "-")),
+         device = "png", plot = HGCC.vulcano$HYPOXIA[[x]], 
+         bg = "white", dpi = 300, width = 12, height = 8, units = "in")
 })
 # Combine the Hypoxia plots into a single figure
 (HGCC.vulcano$HYPOXIA$total <- cowplot::plot_grid(
@@ -625,29 +657,26 @@ sapply(names(HGCC.vulcano$HYPOXIA), function(x){
   rel_widths = c(1, 0.15, 1, 0.15, 1),
   byrow = T, nrow = 1, ncol = 5, scale = 1, 
   margins = c(0.5, 0.5, 0.5, 0.5)))
-
 # Save the plot as svg for publication
-ggsave(file.path(wd, results_dir, date, "plots",
-                 "HGCC_combined_Hypoxia_GSEA_Vulcano_plot.svg"),
-       device = "svg", plot = HGCC.vulcano$HYPOXIA$total, 
+ggsave(file.path(wd, enrich_dir, "plots", paste(date, "HGCC-Hypoxia-GSEA-vulcano-plot.svg", sep = "-")),
+       device = "svg", plot = HGCC.vulcano$HYPOXIA$total,
        bg = "white", width = 15, height = 5, units = "in")
 # Save the plot as png for presentation
-ggsave(file.path(wd, results_dir, date, "plots",
-                 "HGCC_combined_Hypoxia_GSEA_Vulcano_plot.png"),
+ggsave(file.path(wd, enrich_dir, "plots", paste(date, "HGCC-Hypoxia-GSEA-vulcano-plot.png", sep = "-")),
        device = "png", plot = HGCC.vulcano$HYPOXIA$total, 
        bg = "white", dpi = 300, width = 15, height = 5, units = "in")
 
 # 3.) TGF-beta signaling pathway
 (HGCC.vulcano$TGFB <- lapply(vulcano.object, function(x){
   plotClusters(.df = x, 
-               .pathways = interest_pathways %>% filter(Category == "TGFb"))
+               .pathways = vulcano_pathways %>% filter(Category == "TGFb"))
 }))
 # Save individual plots
 sapply(names(HGCC.vulcano$TGFB), function(x){
-  ggsave(file.path(wd, results_dir, date, "plots",
-                   paste(x,"TGFb_GSEA_Vulcano_plot.svg",sep = "_")),
-         device = "svg", plot = HGCC.vulcano$TGFB[[x]], 
-         bg = "white", width = 12, height = 8, units = "in")
+  ggsave(file.path(wd, enrich_dir, "plots", 
+                   paste(date, "HGCC", x,"TGFb-GSEA-vulcano-plot.png",sep = "-")),
+         device = "png", plot = HGCC.vulcano$TGFB[[x]], 
+         bg = "white", dpi = 300, width = 12, height = 8, units = "in")
 })
 # Combine the TGF-b plots into a single figure
 (HGCC.vulcano$TGFB$total <- cowplot::plot_grid(
@@ -660,28 +689,26 @@ sapply(names(HGCC.vulcano$TGFB), function(x){
   rel_widths = c(1, 0.15, 1, 0.15, 1),
   byrow = T, nrow = 1, ncol = 5, scale = 1, 
   margins = c(0.5, 0.5, 0.5, 0.5)))
-
 # Save the plot as svg for publication
-ggsave(file.path(wd, results_dir, date, "plots",
-                 "HGCC_combined_TGFb_GSEA_Vulcano_plot.svg"),
-       device = "svg", plot = HGCC.vulcano$TGFB$total, 
+ggsave(file.path(wd, enrich_dir, "plots", paste(date, "HGCC-TGFb-GSEA-vulcano-plot.svg", sep = "-")),
+       device = "svg", plot = HGCC.vulcano$TGFB$total,
        bg = "white", width = 15, height = 5, units = "in")
 # Save the plot as png for presentation
-ggsave(file.path(wd, results_dir, date, "plots",
-                 "HGCC_combined_TGFb_GSEA_Vulcano_plot.png"),
+ggsave(file.path(wd, enrich_dir, "plots", paste(date, "HGCC-TGFb-GSEA-vulcano-plot.png", sep = "-")),
        device = "png", plot = HGCC.vulcano$TGFB$total, 
        bg = "white", dpi = 300, width = 15, height = 5, units = "in")
 
+
 # remove intermediate objects
-rm(list = c("GO.object", "GSEA.object", "vulcano.ids","vulcano.object",
-            "tgfb.ranks","emt.ranks","hypoxia.ranks"))
+rm(list = c(ls(pattern = "HGCC.*"), ls(pattern = "CCLD.*"),
+            ls(pattern = "*.ranks"), "GO.object", "GSEA.object",
+            "vulcano.ids","vulcano.object","col_order"))
 
 # ---------------------------------------------------------------------------- #
 # -   3.) U87 Chronic Acidosis AA vs NA & HOX vs NOX (Illumina BeadChip)     - #
 # ---------------------------------------------------------------------------- #
-results_dir <- "Results/U87"
-dir.create(file.path(wd, results_dir, date), recursive = T, showWarnings = FALSE)
-
+# Load the processed data
+load(file.path(wd, "RData", "U87_processedData.RData"))
 # Prepare metadata table based on the sample names
 samples <- factor(c("control_sel", "control_sel", "control_sel",
                     "sel_pH64", "sel_pH64", "sel_pH64",
@@ -713,7 +740,7 @@ U87.meta <- data.frame("samplenames" = samples) %>%
 ###  Data exploration
 U87.plots <- list()
 # create PCA plot
-pca_base <- prcomp(t(U87.expr[,5:25]), center = TRUE, scale. = TRUE)
+pca_base <- prcomp(t(U87.expr[,4:24]), center = TRUE, scale. = TRUE)
 (U87.plots$PCA <- plot_pca(
   data = pca_base, 
   .groups = U87.meta$samplenames, 
@@ -745,6 +772,77 @@ U87.deg <- lapply(U87.deg, function(x){
   
   get_significance(.df = df)
 })
+# Save tables
+sapply(names(U87.deg), function(x){
+  openxlsx::write.xlsx(U87.deg[[x]], 
+                       file.path(wd, degs_dir, "tables",
+                                 paste(date, "U87", x, "DEGs.xlsx", sep = "-")))
+})
+
+interest_genes_U87 <- c("CSGALNACT1","CSGALNACT2","CHSY1","CHSY3","CHPF","CHPF2",
+                        "DCN","BGN","DSE","DSEL","CA9","HIF1A","G0S2","C7orf68")
+
+U87.subset <- list()
+
+U87.subset$logexp <- U87.expr %>%
+  dplyr::select(!ENTREZID) %>% 
+  dplyr::filter(SYMBOL %in% interest_genes_U87 & 
+                  PROBEID %in% U87.deg$`sel_pH647-control_sel`$PROBEID) 
+
+U87.subset$exp <- U87.subset$logexp %>% 
+  dplyr::mutate(across("200118400068_I":"200118400033_I", ~ 2^.))
+
+U87.subset$df <- dplyr::inner_join(
+  U87.subset$exp %>% 
+    tidyr::pivot_longer(cols = !c(SYMBOL,PROBEID), values_to = "expression",
+                        names_to = "sample"),
+  U87.subset$logexp %>% 
+    tidyr::pivot_longer(cols = !c(SYMBOL,PROBEID), values_to = "logexp",
+                        names_to = "sample"),
+  by = c("PROBEID","SYMBOL","sample")) %>% 
+  dplyr::rowwise(.) %>% 
+  dplyr::mutate(treatment = case_match(sample,
+                                       c("200118400068_I","200118400035_I","200118400035_D") ~ "control_sel",
+                                       c("200118400035_K","200118400035_G","200118400035_F") ~ "sel_pH64",
+                                       c("200118400068_K","200118400068_D","200118400068_A") ~ "control_acu",
+                                       c("200118400068_C","200118400068_G","200118400033_E") ~ "acu_pH68",
+                                       c("200118400033_B","200118400068_B","200118400035_B") ~ "acu_pH64",
+                                       c("200118400033_G","200118400035_L","200118400033_H") ~ "control_nox",
+                                       c("200118400035_E","200118400035_H","200118400033_I") ~ "hypoxia"
+  )) %>%
+  dplyr::group_by(SYMBOL, treatment) %>% 
+  dplyr::reframe(sample = sample, 
+                 expression = expression,
+                 mean = mean(expression),
+                 se = sd(expression)/sqrt(n()),
+                 logexp = logexp)
+
+
+tmp <- limmaDEA(.data = U87.subset$logexp,
+                .design = samples,
+                .contrast = c("sel_pH64-control_sel",
+                              "acu_pH68-control_acu",
+                              "acu_pH64-control_acu",
+                              "hypoxia-control_nox"))
+
+tmp <- setNames(tmp, c("sel_pH64","acu_pH68",
+                       "acu_pH64","hypoxia"))
+
+U87.subset$df <- lapply(names(tmp), function(x){
+  return(tmp[[x]] %>% 
+           dplyr::mutate(
+             treatment = x,
+             SYMBOL = ID.Symbol) %>% 
+           dplyr::select(SYMBOL,treatment, logFC))
+}) %>% 
+  dplyr::bind_rows(.) %>% 
+  dplyr::full_join(U87.subset$df, ., by = c("SYMBOL", "treatment", "logexp" = "logFC")) %>% 
+  dplyr::mutate(logexp = ifelse(is.na(logexp), 0, logexp))
+
+openxlsx::write.xlsx(U87.subset, 
+                     file.path(wd, degs_dir, "tables",
+                               paste0(date, "-U87-linear-scale-genes-of-interest-expression.xlsx")))
+
 # extract entrez IDs for gene set of interest and background
 U87.genes <- list()
 U87.genes <- lapply(U87.deg, function(x){
@@ -765,11 +863,10 @@ U87.ORA <- lapply(U87.ORA, function(x){
   return(c(x, extract_ora_results(.ora = x[["ora"]],
                                   .db = pathways)))})
 # Save the results
-dir.create(file.path(wd, results_dir, date, "tables"), recursive = T, showWarnings = FALSE)
 sapply(names(U87.ORA), function(x){
   openxlsx::write.xlsx(U87.ORA[[x]][c(2:3)], 
-                       file.path(wd, results_dir, date, "tables",
-                                 paste0("U87_", x, "_all_pathway_ORA.xlsx")))
+                       file.path(wd, enrich_dir, "tables",
+                                 paste(date, "U87", x, "ORA-pathways.xlsx", sep="-")))
 })
 
 # Run the GSEA analysis
@@ -786,8 +883,8 @@ U87.GO <- lapply(U87.GO,
 # Save the results
 sapply(names(U87.GO), function(x){
   openxlsx::write.xlsx(U87.GO[[x]][c(2:3)], 
-                       file.path(wd, results_dir, date, "tables",
-                                 paste0("U87_", x, "_all_go&hallmark_GSEA.xlsx")))
+                       file.path(wd, enrich_dir, "tables",
+                                 paste(date, "U87", x,"GSEA-go&hallmark.xlsx", sep = "-")))
 })
 
 U87.GSEA <- list()
@@ -802,78 +899,20 @@ U87.GSEA <- lapply(U87.GSEA,
                     })
 # Save the results
 sapply(names(U87.GSEA), function(x){
-  openxlsx::write.xlsx(U87.GSEA[[x]][c(2:3)], 
-                       file.path(wd, results_dir, date, "tables",
-                                 paste0("U87_", x, "_all_pathway_GSEA.xlsx")))
+  openxlsx::write.xlsx(U87.ORA[[x]][c(2:3)], 
+                       file.path(wd, degs_dir, "tables",
+                                 paste(date, "U87", x, "GSEA-pathways.xlsx", sep = "-")))
 })
 
+# Save enrichment results
+save(U87.GO, U87.GSEA,
+     file = file.path(wd, "RData", "U87_enrichment_results.RData"))
+# Clear intermediate results
+rm(list = c(ls(pattern = "U87.*"), "interest_genes_U87", "tmp", "pca_base"))
 
-interest_genes_U87 <- c("CSGALNACT1","CSGALNACT2","CHSY1","CHSY3","CHPF","CHPF2",
-                        "DCN","BGN","DSE","DSEL","CA9","HIF1A","G0S2","C7orf68")
+# Combine enrichment results for the U87 cell line
+load(file.path(wd, "RData", "U87_enrichment_results.RData"))
 
-U87.subset <- list()
-
-U87.subset$logexp <- U87.expr %>%
-  dplyr::select(!ENTREZID) %>% 
-  dplyr::filter(SYMBOL %in% interest_genes_U87 & 
-                  PROBEID %in% U87.deg$`sel_pH647-control_sel`$ID.ID) 
-
-U87.subset$exp <- U87.subset$logexp %>% 
-  dplyr::mutate(across("200118400068_I":"200118400033_I", ~ 2^.))
-
-U87.subset$df <- dplyr::inner_join(
-  U87.subset$exp %>% 
-    tidyr::pivot_longer(cols = !c(SYMBOL,PROBEID), values_to = "expression",
-                        names_to = "sample"),
-  U87.subset$logexp %>% 
-    tidyr::pivot_longer(cols = !c(SYMBOL,PROBEID), values_to = "logexp",
-                        names_to = "sample"),
-  by = c("PROBEID","SYMBOL","sample")) %>% 
-  dplyr::rowwise(.) %>% 
-  dplyr::mutate(treatment = case_match(sample,
-    c("200118400068_I","200118400035_I","200118400035_D") ~ "control_sel",
-    c("200118400035_K","200118400035_G","200118400035_F") ~ "sel_pH64",
-    c("200118400068_K","200118400068_D","200118400068_A") ~ "control_acu",
-    c("200118400068_C","200118400068_G","200118400033_E") ~ "acu_pH68",
-    c("200118400033_B","200118400068_B","200118400035_B") ~ "acu_pH64",
-    c("200118400033_G","200118400035_L","200118400033_H") ~ "control_nox",
-    c("200118400035_E","200118400035_H","200118400033_I") ~ "hypoxia"
-  )) %>%
-  dplyr::group_by(SYMBOL, treatment) %>% 
-  dplyr::reframe(sample = sample, 
-                 expression = expression,
-                 mean = mean(expression),
-                 se = sd(expression)/sqrt(n()),
-                 logexp = logexp)
-
-
-tmp <- limmaDEA(.data = U87.subset$logexp,
-         .design = samples,
-         .contrast = c("sel_pH647-control_sel",
-                       "acu_pH68-control_acu",
-                       "acu_pH64-control_acu",
-                       "hypoxia-control_nox"))
-
-tmp <- setNames(tmp, c("sel_pH64","acu_pH68",
-                "acu_pH64","hypoxia"))
-
-U87.subset$df <- lapply(names(tmp), function(x){
-  return(tmp[[x]] %>% 
-           dplyr::mutate(
-             treatment = x,
-             SYMBOL = ID.Symbol) %>% 
-           dplyr::select(SYMBOL,treatment, logFC))
-  }) %>% 
-  dplyr::bind_rows(.) %>% 
-  dplyr::full_join(U87.subset$df, ., by = c("SYMBOL", "treatment", "logFC")) %>% 
-  dplyr::mutate(logFC = ifelse(is.na(logFC), 0, logFC))
-
-dir.create(file.path(wd, "Results", "U87", date, "tables"), recursive = T, showWarnings = FALSE)
-openxlsx::write.xlsx(U87.subset, 
-                     file.path(wd, "Results", "U87", date, "tables",
-                               "U87_linear_scale_genes-of-interest_expression.xlsx"))
-
-# Combine enrichment results for CCLD and HGCC cell lines
 GSEA.object = list(
   U87_sel = U87.GSEA$`sel_pH647-control_sel`$gsea,
   U87_acu = U87.GSEA$`acu_pH64-control_acu`$gsea
@@ -920,10 +959,14 @@ U87.enrichplot$TGFB$TOTAL_table <- getEnrichmentTable(
   byrow = T, nrow = 2, ncol = 1, scale = .95, 
   rel_heights = c(1.2,1), axis = "r",
   margins = c(0.5, 0.5, 0.5, 0.5)))
-
-ggsave(file.path(wd, results_dir, date, "plots", "TGFB_GSEA_enrichment_plot.svg"),
+# Save as svg for publication
+ggsave(file.path(wd, enrich_dir, "plots", paste(date, "U87-TGFb-GSEA-enrichment-plot.svg", sep = "-")),
        device = "svg", plot = U87.enrichplot$TGFB$TOTAL_plot,
        bg = "white", width = 6, height = 4.45, units = "in")
+# Save as png for presentation
+ggsave(file.path(wd, enrich_dir, "plots", paste(date, "U87-TGFb-GSEA-enrichment-plot.png", sep = "-")),
+       device = "png", plot = U87.enrichplot$TGFB$TOTAL_plot,
+       bg = "white", dpi = 300, width = 6, height = 4.45, units = "in")
 
 # 2.) EMT
 emt.ranks = list(
@@ -964,13 +1007,13 @@ U87.enrichplot$EMT$TOTAL_table <- getEnrichmentTable(
   margins = c(0.5, 0.5, 0.5, 0.5)))
 
 # Save as svg for publication
-ggsave(file.path(wd, results_dir, date, "plots", "U87_EMT_GO_enrichment_plot.svg"),
+ggsave(file.path(wd, enrich_dir, "plots", paste(date, "U87-EMT-GSEA-enrichment-plot.svg", sep = "-")),
        device = "svg", plot = U87.enrichplot$EMT$TOTAL_plot,
        bg = "white", width = 6, height = 4.45, units = "in")
 # Save as png for presentation
-ggsave(file.path(wd, results_dir, date, "plots", "U87_EMT_GO_enrichment_plot.png"),
+ggsave(file.path(wd, enrich_dir, "plots", paste(date, "U87-EMT-GSEA-enrichment-plot.png", sep = "-")),
        device = "png", plot = U87.enrichplot$EMT$TOTAL_plot,
-       bg = "white", ppi = 300, width = 6, height = 4.45, units = "in")
+       bg = "white", dpi = 300, width = 6, height = 4.45, units = "in")
 
 # 3.) Hypoxia
 hypoxia.ranks = list(
@@ -1009,15 +1052,14 @@ U87.enrichplot$HYPOXIA$TOTAL_table <- getEnrichmentTable(
   byrow = T, nrow = 2, ncol = 1, scale = .95, 
   rel_heights = c(1.2,1), axis = "r",
   margins = c(0.5, 0.5, 0.5, 0.5)))
-
 # Save as svg for publication
-ggsave(file.path(wd, results_dir, date, "plots", "U87_Hypoxia_GO_enrichment_plot.svg"),
-       device = "svg", plot = Hypoxia.enrichplot$U87_plot, 
+ggsave(file.path(wd, enrich_dir, "plots", paste(date, "U87-Hypoxia-GSEA-enrichment-plot.svg", sep = "-")),
+       device = "svg", plot = U87.enrichplot$HYPOXIA$TOTAL_plot, 
        bg = "white", width = 6, height = 4.45, units = "in")
 # Save as png for presentation
-ggsave(file.path(wd, results_dir, date, "plots", "U87_Hypoxia_GO_enrichment_plot.png"),
-       device = "png", plot = U87.enrichplot$HYPOXIA$TOTAL_plot,
-       bg = "white", ppi = 300, width = 6, height = 4.45, units = "in")
+ggsave(file.path(wd, enrich_dir, "plots", paste(date, "U87-Hypoxia-GSEA-enrichment-plot.png", sep = "-")),
+       device = "png", plot = U87.enrichplot$HYPOXIA$TOTAL_plot, 
+       bg = "white", dpi = 300, width = 6, height = 4.45, units = "in")
 
 # Vulcano visualization of the shared terms and pathways
 U87.vulcano.object <- list(
@@ -1061,51 +1103,49 @@ U87.vulcano.object <- lapply(U87.vulcano.object, function(df) {
 U87.vulcano <- list()
 (U87.vulcano$ECM <- lapply(U87.vulcano.object, function(x){
   plotClusters(.df = x, 
-               .pathways = interest_pathways %>% filter(Category == "ECM"))
+               .pathways = vulcano_pathways %>% filter(Category == "ECM"))
 }))
 # Save individual plots
 sapply(names(U87.vulcano$ECM), function(x){
-  ggsave(file.path(wd, results_dir,date,"plots",
-                   paste(x,"ECM_GSEA_Vulcano_plot.svg",sep = "_")),
-         device = "svg", plot = U87.vulcano$ECM[[x]],
-         bg = "white", width = 12, height = 8,units = "in")
+  ggsave(file.path(wd, enrich_dir, "plots",
+                   paste(date, "U87", x, "ECM-GSEA-Vulcano-plot.png", sep = "-")),
+         device = "png", plot = U87.vulcano$ECM[[x]],
+         bg = "white", dpi = 300, width = 12, height = 8,units = "in")
 })
 
 # 2.) Hypoxia
 (U87.vulcano$HYPOXIA <- lapply(U87.vulcano.object, function(x){
   plotClusters(.df = x, 
-               .pathways = interest_pathways %>% filter(Category == "HYPOXIA"))
+               .pathways = vulcano_pathways %>% filter(Category == "HYPOXIA"))
 }))
 # Save individual plots
 sapply(names(U87.vulcano$HYPOXIA), function(x){
-  ggsave(file.path(wd, results_dir,date,"plots",
-                   paste(x,"Hypoxia_GSEA_Vulcano_plot.svg",sep = "_")),
-         device = "svg", plot = U87.vulcano$HYPOXIA[[x]],
-         bg = "white", width = 12, height = 8, units = "in")
+  ggsave(file.path(wd, enrich_dir, "plots",
+            paste(date, "U87", x, "Hypoxia-GSEA-Vulcano-plot.png", sep = "-")),
+         device = "png", plot = U87.vulcano$HYPOXIA[[x]],
+         bg = "white", dpi = 300, width = 12, height = 8, units = "in")
 })
 
 # 3.) TGF-beta signaling pathway
 (U87.vulcano$TGFB <- lapply(U87.vulcano.object, function(x){
   plotClusters(.df = x, 
-               .pathways = interest_pathways %>% filter(Category == "TGFb"))
+               .pathways = vulcano_pathways %>% filter(Category == "TGFb"))
 }))
 # Save individual plots
 sapply(names(U87.vulcano$TGFB), function(x){
-  ggsave(file.path(wd, results_dir,date,"plots",
-                   paste(x,"TGFb_GSEA_Vulcano_plot.svg",sep = "_")),
-         device = "svg", plot = U87.vulcano$TGFB[[x]],
-         bg = "white", width = 12, height = 8,units = "in")
+  ggsave(file.path(wd, enrich_dir, "plots",
+                   paste(date, "U87", x, "TGFb-GSEA-Vulcano-plot.png", sep = "-")),
+         device = "png", plot = U87.vulcano$TGFB[[x]],
+         bg = "white", dpi = 300, width = 12, height = 8,units = "in")
 })
-
 # remove intermediate objects
-rm(list = c("GO.object", "GSEA.object", "U87.vulcano.ids","U87.vulcano.object",
-            "tgfb.ranks","emt.ranks","hypoxia.ranks"))
+rm(list = c(ls(pattern = "U87.*"), ls(pattern = "*.ranks"),
+            "GO.object", "GSEA.object"))
 
 # ---------------------------------------------------------------------------- #
 # -   4.) PANC1 Chronic Acidosis AA vs NA (Clariom D Human Pico) Affymetrix  - #
 # ---------------------------------------------------------------------------- #
-results_dir <- "Results/PANC1"
-dir.create(file.path(wd, results_dir, date), recursive = T, showWarnings = FALSE)
+load(file.path(wd, "RData", "PANC1_processedData.RData"))
 
 PANC1.deg <- PANC1.deg %>% 
   dplyr::rename(PROBEID = "ID.ID", Symbol = "ID.Symbol",
@@ -1113,43 +1153,9 @@ PANC1.deg <- PANC1.deg %>%
                 pvalue = "P.Value", padj = "adj.P.Val") %>% 
   get_significance(.)
 
-table(PANC1.deg$significance)
-# Save file
-dir.create(file.path(wd, results_dir, date, "tables"), recursive = T, showWarnings = FALSE)
-write.xlsx(PANC1.deg, file.path(wd, results_dir, date, "tables", "PANC1_DEGs.xlsx"))
-
-## extract entrez IDs for gene set of interest and background
-PANC1.genes <- get_genelist(.df = PANC1.deg,
-                           .filter = PANC1.deg[["significance"]] %in% c("Signif. up-regulated", 
-                                                                      "Signif. down-regulated"),
-                           .value = "log2FoldChange",
-                           .name = "entrezID")
-
-## Run the ORA analysis
-PANC1.ORA <- run_ora(.interest = PANC1.genes$interest,
-                    .background = PANC1.genes$background,
-                    .pathways = pathways)
-PANC1.ORA <- c(PANC1.ORA, extract_ora_results(.ora = PANC1.ORA$ora, .db = pathways))
-# Save the results
-openxlsx::write.xlsx(PANC1.ORA[c(2:3)], 
-                     file.path(wd, results_dir, date, "tables", "PANC1_pathway_ORA.xlsx"))
-
-# GSEA on the GO terms and hallmarks from MSigDB
-PANC1.GO <- run_gsea(.geneset = PANC1.genes$background, 
-                    .terms = terms)
-PANC1.GO <- c(PANC1.GO, extract_gsea_results(.gsea = PANC1.GO$gsea, .db = terms))
-# Save the results
-openxlsx::write.xlsx(PANC1.GO[c(2:3)], 
-                     file.path(wd, results_dir, date, "tables", "PANC1_all_go&hallmark_GSEA.xlsx"))
-
-# GSEA on the KEGG- and REACTOME pathways from MSigDB
-PANC1.GSEA <- run_gsea(.geneset = PANC1.genes$background,
-                      .terms = pathways)
-PANC1.GSEA <- c(PANC1.GSEA, extract_gsea_results(.gsea = PANC1.GSEA$gsea, .db = pathways))
-# Save the results
-openxlsx::write.xlsx(PANC1.GSEA[c(2:3)],
-                     file.path(wd, results_dir, date, "tables", "PANC1_all_pathway_GSEA.xlsx"))
-
+# Save tables
+openxlsx::write.xlsx(PANC1.deg, file.path(wd, degs_dir, "tables",
+                                 paste(date, "PANC1-DEGs.xlsx", sep = "-")))
 
 interest_genes_PANC1 <- c("CSGALNACT1","CSGALNACT2","CHSY1","DCN","BGN","DSE","DSEL")
 
@@ -1159,7 +1165,7 @@ PANC1.subset$logexp <- PANC1.expr %>%
   dplyr::select(!c(ENTREZID, GENENAME)) %>% 
   dplyr::filter(SYMBOL %in% interest_genes_PANC1 & 
                   PROBEID %in% PANC1.deg$PROBEID) 
-                
+
 
 PANC1.subset$exp <- PANC1.subset$logexp %>% 
   dplyr::mutate(across("1_NA1_(Clariom_D_Human).CEL":"6_AA3_(Clariom_D_Human).CEL", ~ 2^.))
@@ -1202,7 +1208,60 @@ PANC1.subset$df <- tmp[[1]] %>%
   dplyr::full_join(PANC1.subset$df, ., by = c("SYMBOL")) %>% 
   dplyr::mutate(logFC = ifelse(is.na(logFC), 0, logFC))
 
-dir.create(file.path(wd, "Results", "PANC1", date, "tables"), recursive = T, showWarnings = FALSE)
 openxlsx::write.xlsx(PANC1.subset, 
-                     file.path(wd, "Results", "PANC1", date, "tables",
-                               "PANC1_linear_scale_genes-of-interest_expression.xlsx"))
+                     file.path(wd, degs_dir, "tables",
+                               paste(date, "PANC1-linear-scale-genes-of-interest-expression.xlsx", sep="-")))
+
+## extract entrez IDs for gene set of interest and background
+PANC1.genes <- get_genelist(.df = PANC1.deg,
+                            .filter = PANC1.deg[["significance"]] %in% c("Signif. up-regulated", 
+                                                                         "Signif. down-regulated"),
+                           .value = "log2FoldChange",
+                           .name = "entrezID")
+
+## Run the ORA analysis
+PANC1.ORA <- run_ora(.interest = PANC1.genes$interest,
+                    .background = PANC1.genes$background,
+                    .pathways = pathways)
+PANC1.ORA <- c(PANC1.ORA, extract_ora_results(.ora = PANC1.ORA$ora, .db = pathways))
+# Save the results
+openxlsx::write.xlsx(PANC1.ORA[c(2:3)], 
+                     file.path(wd, enrich_dir, "tables", 
+                               paste(date, "PANC1-ORA-pathways.xlsx", sep ="-")))
+
+# GSEA on the GO terms and hallmarks from MSigDB
+PANC1.GO <- run_gsea(.geneset = PANC1.genes$background,
+                     .terms = terms)
+PANC1.GO <- c(PANC1.GO, 
+              extract_gsea_results(.gsea = PANC1.GO$gsea, 
+                                   .db = terms))
+# Save the results
+openxlsx::write.xlsx(PANC1.GO[c(2:3)], 
+                     file.path(wd, enrich_dir, "tables",
+                               paste(date, "PANC1-GSEA-go&hallmark.xlsx", sep ="-")))
+
+# GSEA on the KEGG- and REACTOME pathways from MSigDB
+PANC1.GSEA <- run_gsea(.geneset = PANC1.genes$background,
+                       .terms = pathways)
+PANC1.GSEA <- c(PANC1.GSEA, 
+                extract_gsea_results(.gsea = PANC1.GSEA$gsea, 
+                                     .db = pathways))
+# Save the results
+openxlsx::write.xlsx(PANC1.GSEA[c(2:3)],
+                     file.path(wd, enrich_dir, "tables",
+                               paste(date, "PANC1-GSEA-pathways.xlsx")))
+
+# Save GSEA resutls
+save(PANC1.GO, PANC1.GSEA,
+     file = file.path(wd, "RData", "PANC1_enrichment_results.RData"))
+
+# Remove intermediate results
+rm(list = c(ls(pattern = "PANC.*"), "interest_genes_PANC1", "vulcano_pathways"))
+
+################################################################################
+# Clean up the environment                                                     #
+################################################################################
+# Run garbage collection to free up memory
+gc() 
+# Clear the environment
+rm(list = ls()) 
