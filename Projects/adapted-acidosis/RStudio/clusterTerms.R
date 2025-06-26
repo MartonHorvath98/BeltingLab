@@ -33,7 +33,7 @@ if (!file.exists("./RData/term_similarity_matrix.RData")){
   save(similarity.matrix, file = "./RData/term_similarity_matrix.RData")
   # save file
   dir.create("../data/processed/similarity_matrix", showWarnings = FALSE)
-  write.xlsx(similarity.matrix, ove
+  write.xlsx(similarity.matrix,
              file = "../data/processed/similarity_matrix/term_similarity_matrix.xlsx")
 } else {
   load("./RData/term_similarity_matrix.RData")

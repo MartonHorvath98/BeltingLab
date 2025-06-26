@@ -16,10 +16,18 @@ if (file.exists(file.path(wd, "functions.R"))) {
 } else {
   stop("Required file 'functions.R' not found in the working directory.")
 }
+# Get current date for results directory
+date <- format(Sys.Date(), "%Y-%m-%d")
+# Create results directory
+signature_dir <- "Results/Signature"
+# Create tables and plots directories
+dir.create(file.path(wd, signature_dir, "tables"), recursive = T, showWarnings = FALSE)
+dir.create(file.path(wd, signature_dir, "plots"), recursive = T, showWarnings = FALSE)
+# -------------------------- Load analysis data ------------------------------ #
 # Load hallmarks
 load(file = file.path(wd, "RData", "MSigDB_gene_sets.RData"))
 # Load gene signature
-lipid_droplet_genes <- read.csv("data/gene-signature-new.txt", header = T,
+lipid_droplet_genes <- read.csv("../data/gene-signature-new.txt", header = T,
                            sep = "\t", stringsAsFactors = T)
 subtype_hallmarks <- msigdbr_df %>% 
   dplyr::filter(gs_cat == "C2" & gs_subcat == "CGP" & 
@@ -35,17 +43,17 @@ subtype_hallmarks <- lapply(subtype_hallmarks, function(x) {
 #                       IvyGap downloaded from GlioVis                         #
 ################################################################################
 # 1.) Load Ivy Gap data
-IvyGap <- read.table("./data/raw/IvyGap/2025-01-23_Ivy_GAP_expression.csv", header=TRUE,
+IvyGap <- read.table("../data/raw/IvyGap/2025-01-23_Ivy_GAP_expression.csv", header=TRUE,
                      sep = ",", dec = ".")
-IvyGap.genes <- read.table("./data/raw/IvyGap/2025-01-23_Ivy_GAP_genes.csv", header=TRUE,
+IvyGap.genes <- read.table("../data/raw/IvyGap/2025-01-23_Ivy_GAP_genes.csv", header=TRUE,
                            sep = ",", dec = ".")
 IvyGap <- merge(IvyGap.genes, IvyGap, by.x="gene_id", by.y="gene_id.rna_well_id")
 row.names(IvyGap) <- IvyGap$gene_symbol
 IvyGap <- IvyGap[,-c(1:5)]
 colnames(IvyGap) <- gsub(x = colnames(IvyGap), pattern = "X", replacement = "")
 # Load clinical data
-clin1 <- read.table("./data/raw/IvyGap/2024-05-24_Ivy_GAP_pheno.txt", header=TRUE)
-clin2 <- read.table("./data/raw/IvyGap/2025-01-23_Ivy_GAP_pheno.csv", header=TRUE,
+clin1 <- read.table("../data/raw/IvyGap/2024-05-24_Ivy_GAP_pheno.txt", header=TRUE)
+clin2 <- read.table("../data/raw/IvyGap/2025-01-23_Ivy_GAP_pheno.csv", header=TRUE,
                     sep = ",", dec = ".")
 clin_IvyGap <- merge(clin2, clin1, by.x="rna_well_id", by.y="Sample")
 rm(clin1,clin2)
@@ -53,6 +61,16 @@ rm(clin1,clin2)
 Prim_IG <- clin_IvyGap[which(clin_IvyGap$Recurrence=="Primary" & # filter for primary GBM
                                !is.na(clin_IvyGap$Histology)),] # no IDH information
 sel_IvyGap <- IvyGap[,which(colnames(IvyGap) %in% Prim_IG$rna_well_id)]
+
+
+#Save RDatas
+save(IvyGap, clin_IvyGap, Prim_IG, sel_IvyGap,
+     file = "./RData/IvyGap_processedData.RData")
+
+### Save data to excel
+list_of_datasets <- list("PrimaryGBM_gexp" = sel_IvyGap, "PrimaryGBM_clinical" = Prim_IG,
+                         "FullDataset_gexp" = IvyGap, "FullDataset_clinical" = clin_IvyGap)
+write.xlsx(list_of_datasets, file = "../data/processed/clinical/IvyGap.xlsx", colNames=TRUE, rowNames=TRUE)
 
 # Calculate lipid droplet gene signature
 Ivygap.score <- hack_sig(as.matrix(sel_IvyGap),
@@ -86,16 +104,21 @@ Ivygap.score <- Ivygap.score %>%
   )
 
 # Plot histology
+Ivygap.plot <- list()
 (Ivygap.plot$histology <- score_plot(.score = Ivygap.score, .formula = "zscore ~ Histology",
                                      .ref_group = "Pseudopalisading cells", .x = "Histology",
                                      .y = "zscore", .title = "Lipid droplet gene signature"))
 
 # Save histology plot as png
-ggsave(file.path("Results","signature", "IvyGap_signature_histology_log0_new_signature.png"), Ivygap.plot$histology$plot,
-                 device = "png", width = 6, height = 4, units = "in")
+ggsave(file.path(wd, signature_dir, "plots",
+                 paste(date, "IvyGap-signature-histology-log0-new-signature.png", sep = "-")),
+       device = "png", Ivygap.plot$histology$plot,
+       bg = "white", dpi = 300, width = 6, height = 4, units = "in")
 # Save histology plot as svg
-ggsave(file.path("Results", "signature","IvyGap_signature_histology_log0_new_signature.svg"), Ivygap.plot$histology$plot,
-                 device = "svg", width = 6, height = 4, units = "in")
+ggsave(file.path(wd, signature_dir, "plots",
+                 paste(date, "IvyGap-signature-histology-log0-new-signature.svg", sep = "-")),
+       device = "svg", Ivygap.plot$histology$plot,
+       bg = "white", width = 6, height = 4, units = "in")
 
 # 3.) Create visualization
 # Plot subtype
@@ -104,30 +127,35 @@ ggsave(file.path("Results", "signature","IvyGap_signature_histology_log0_new_sig
                                   .y = "zscore", .title = "Lipid droplet gene signature",
                                   number = T))
 
-# Save subtype plot as png
-ggsave(file.path("Results", "signature","IvyGap_signature_subtype_log0_new_signature.png"), Ivygap.plot$subtype$plot,
-                 device = "png", width = 6, height = 4, units = "in")
-# Save subtype plot as svg
-ggsave(file.path("Results", "signature","IvyGap_signature_subtype_log0_new_signature.svg"), Ivygap.plot$subtype$plot,
-                 device = "svg", width = 6, height = 4, units = "in")
+# Save histology plot as png
+ggsave(file.path(wd, signature_dir, "plots",
+                 paste(date, "IvyGap-signature-subtype-log0-new-signature.png", sep = "-")),
+       device = "png", Ivygap.plot$subtype$plot,
+       bg = "white", dpi = 300, width = 6, height = 4, units = "in")
+# Save histology plot as svg
+ggsave(file.path(wd, signature_dir, "plots",
+                 paste(date, "IvyGap-signature-subtype-log0-new-signature.svg", sep = "-")),
+       device = "svg", Ivygap.plot$subtype$plot,
+       bg = "white", width = 6, height = 4, units = "in")
 
 # Save histology and subtype statistics to excel
 write.xlsx(list("Histology" = Ivygap.plot$histology$stat.test,
-                "Subtype" = CGGA.plot$subtype$stat.test),
-           file.path("Results", "signature","IvyGap_histology+subtype_wilcox_test_new_signature.xlsx"),
+                "Subtype" = Ivygap.plot$subtype$stat.test),
+           file.path(wd, signature_dir, "tables",
+                     paste(date,"IvyGap-histology&subtype-wilcox-test-new-signature.xlsx")),
            colNames=TRUE, rowNames=F)
 
 # remove objects
-rm(list = c("IvyGap", "clin_IvyGap", "Prim_IG", "sel_IvyGap", "Ivygap.type"))
+rm(list = c("IvyGap", "clin_IvyGap", "Prim_IG", "sel_IvyGap", "Ivygap.type",
+            "Ivygap.score", "Ivygap.plot", "IvyGap.genes", "list_of_datasets"))
 
 ################################################################################
 #                       TCGA download primary GBM                              #
 ################################################################################
 # 1.) Load TCGA data
-data_dir <- "./data/raw/TCGA_GBM/"
-TCGA.expression <- read.table(file = file.path(data_dir, "TCGA_GBM_expression.txt"),
+TCGA.expression <- read.table("../data/raw/TCGA/TCGA_GBM_expression.txt",
                               header = T, sep = "\t")
-TCGA.clinical <- read.table(file = file.path(data_dir, "TCGA_GBM_pheno.txt"),
+TCGA.clinical <- read.table("../data/raw/TCGA/TCGA_GBM_pheno.txt",
                             header = T, sep = "\t")
 
 # 2.) Process TCGA data
@@ -152,7 +180,7 @@ save(TCGA.expression, TCGA.clinical, sel_TCGA.expression, TCGA.primary,
 ### Save data to excel
 list_of_datasets <- list("PrimaryGBM_gexp" = sel_TCGA.expression, "PrimaryGBM_clinical" = TCGA.primary,
                          "FullDataset_gexp" = TCGA.expression, "FullDataset_clinical" = TCGA.clinical)
-write.xlsx(list_of_datasets, file = "./data/processed/TCGA.xlsx", colNames=TRUE, rowNames=TRUE)
+write.xlsx(list_of_datasets, file = "../data/processed/clinical/TCGA.xlsx", colNames=TRUE, rowNames=TRUE)
 
 # Calculate lipid droplet gene signature
 TCGA.score <- hack_sig(as.matrix(sel_TCGA.expression),
@@ -194,29 +222,35 @@ TCGA.plot <- list()
                                   .y = "zscore", .title = "Lipid droplet gene signature",
                                  number = T))
 
-# Save subtype plot as png
-ggsave(file.path("Results", "signature","TCGA_signature_subtype_log0_new_signature.png"), TCGA.plot$subtype$plot,
-                 device = "png", width = 6, height = 4, units = "in")
-# Save subtype plot as svg
-ggsave(file.path("Results", "signature","TCGA_signature_subtype_log0_new_signature.svg"), TCGA.plot$subtype$plot,
-                 device = "svg", width = 6, height = 4, units = "in")
+# Save histology plot as png
+ggsave(file.path(wd, signature_dir, "plots",
+                 paste(date, "TCGA-signature-subtype-log0-new-signature.png", sep = "-")),
+       device = "png", TCGA.plot$subtype$plot,
+       bg = "white", dpi = 300, width = 6, height = 4, units = "in")
+# Save histology plot as svg
+ggsave(file.path(wd, signature_dir, "plots",
+                 paste(date, "TCGA-signature-subtype-log0-new-signature.svg", sep = "-")),
+       device = "svg", TCGA.plot$subtype$plot,
+       bg = "white", width = 6, height = 4, units = "in")
 
-write.xlsx(list("Subtype" = TCGA.plot$subtype$stat.test),
-           file.path("Results", "signature","TCGA_subtype_wilcox_test_new_signature.xlsx"),
+# Save histology and subtype statistics to excel
+write.xlsx(list("Histology" = TCGA.plot$histology$stat.test,
+                "Subtype" = TCGA.plot$subtype$stat.test),
+           file.path(wd, signature_dir, "tables",
+                     paste(date,"TCGA-histology&subtype-wilcox-test-new-signature.xlsx")),
            colNames=TRUE, rowNames=F)
 
-rm(list = c("TCGA.expression", "TCGA.clinical", "sel_TCGA.expression", 
-            "TCGA.primary", "TCGA.type"))
-
+# remove objects
+rm(list = c("TCGA.expression", "TCGA.clinical", "TCGA.primary", "sel_TCGA.expression",
+            "TCGA.type", "TCGA.score", "TCGA.plot", "list_of_datasets"))
 
 ################################################################################
-#                       TCGA download primary GBM                              #
+#                       CGGA download primary GBM                              #
 ################################################################################
 # 1.) Load CGGA data
-data_dir <- "./data/raw/CGGA/"
-CGGA.expression <- read.table(file = file.path(data_dir, "CGGA_expression.txt"),
+CGGA.expression <- read.table("../data/raw/CGGA/CGGA_expression.txt",
                               header = T, sep = "\t")
-CGGA.clinical <- read.table(file = file.path(data_dir, "CGGA_pheno.txt"),
+CGGA.clinical <- read.table("../data/raw/CGGA/CGGA_pheno.txt",
                             header = T, sep = "\t")
 
 CGGA.primary <- CGGA.clinical[which(CGGA.clinical$Recurrence=="Primary"  
@@ -234,13 +268,14 @@ CGGA.expression <- as.data.frame(CGGA.expression) %>%
   dplyr::mutate(across(everything(), ~ifelse(is.infinite(.), 0, .)))
 
 #Save RDatas
-save(CGGA.expression, CGGA.clinical, CGGA.primary, file = "./RData/CGGA_processedData.RData")
+save(CGGA.expression, CGGA.clinical, CGGA.primary, 
+     file = "./RData/CGGA_processedData.RData")
 
 ### Save data to excel
 list_of_datasets <- list("PrimaryGBM_gexp" = CGGA.expression, "PrimaryGBM_clinical" = CGGA.primary,
                          "FullDataset_gexp" = CGGA.expression, "FullDataset_clinical" = CGGA.clinical)
 
-write.xlsx(list_of_datasets, file = "./data/processed/CGGA.xlsx", colNames=TRUE, rowNames=TRUE)
+write.xlsx(list_of_datasets, file = "../data/processed/clinical/CGGA.xlsx", colNames=TRUE, rowNames=TRUE)
 
 # Calculate lipid droplet gene signature
 CGGA.score <- hack_sig(as.matrix(CGGA.expression),
@@ -281,15 +316,33 @@ CGGA.plot <- list()
                                   .y = "zscore", .title = "Lipid droplet gene signature",
                                  number = T))
 
-# Save subtype plot as png
-ggsave(file.path("Results", "signature","CGGA_signature_subtype_log0_new_signature.png"), CGGA.plot$subtype$plot,
-                 device = "png", width = 6, height = 4, units = "in")
-# Save subtype plot as svg
-ggsave(file.path("Results", "signature","CGGA_signature_subtype_log0_new_signature.svg"), CGGA.plot$subtype$plot,
-                 device = "svg", width = 6, height = 4, units = "in")
-write.xlsx(list("Subtype" = CGGA.plot$subtype$stat.test),
-           file.path("Results", "signature","CGGA_subtype_wilcox_test_new_signature.xlsx"),
-           colNames=TRUE, rowNames=F)
-rm(list = c("CGGA.expression", "CGGA.clinical", "CGGA.primary", "CGGA.type"))
+# Save histology plot as png
+ggsave(file.path(wd, signature_dir, "plots",
+                 paste(date, "CGGA-signature-subtype-log0-new-signature.png", sep = "-")),
+       device = "png", CGGA.plot$subtype$plot,
+       bg = "white", dpi = 300, width = 6, height = 4, units = "in")
+# Save histology plot as svg
+ggsave(file.path(wd, signature_dir, "plots",
+                 paste(date, "CGGA-signature-subtype-log0-new-signature.svg", sep = "-")),
+       device = "svg", CGGA.plot$subtype$plot,
+       bg = "white", width = 6, height = 4, units = "in")
 
+# Save histology and subtype statistics to excel
+write.xlsx(list("Histology" = CGGA.plot$histology$stat.test,
+                "Subtype" = CGGA.plot$subtype$stat.test),
+           file.path(wd, signature_dir, "tables",
+                     paste(date,"CGGA-histology&subtype-wilcox-test-new-signature.xlsx")),
+           colNames=TRUE, rowNames=F)
+
+# remove objects
+rm(list = c("CGGA.expression", "CGGA.clinical", "CGGA.primary",
+            "CGGA.type", "CGGA.score", "CGGA.plot", "list_of_datasets"))
+
+################################################################################
+# Clean up the environment                                                     #
+################################################################################
+# Run garbage collection to free up memory
+gc() 
+# Clear the environment
+rm(list = ls()) 
 
